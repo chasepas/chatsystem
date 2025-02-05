@@ -6,7 +6,8 @@ body{
   
     overflow: hidden;
     animation: blur 0.5s ease-out;
-  
+    width: 264px;
+    height: 217px;
   }
   *{
     outline: none;
