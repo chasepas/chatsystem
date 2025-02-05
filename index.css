@@ -125,12 +125,12 @@ body{
   
   }
   #chat_inner_container{
-    width: 40%;
+    width: 100%;
     height: 100%;
   }
   #chat_content_container{
     width: 100%;
-    height: 90%;
+    height: 50%;
   
     float: left;
     overflow-y: auto;
