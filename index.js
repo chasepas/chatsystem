@@ -16,7 +16,7 @@ window.onload = function() {
     // This is very IMPORTANT!! We're going to use "db" a lot.
     var db = firebase.database()
     // We're going to use oBjEcT OrIeNtEd PrOgRaMmInG. Lol
-    class MEME_CHAT{
+    class DOC_CHAT{
       // Home() is used to create the home page
       home(){
         // First clear the body before adding in
@@ -48,7 +48,6 @@ window.onload = function() {
       }
       // create_join_form() creates the join form
       create_join_form(){
-        // YOU MUST HAVE (PARENT = THIS). OR NOT. I'M NOT YOUR BOSS!😂
         var parent = this;
   
         var join_container = document.createElement('div')
@@ -84,7 +83,6 @@ window.onload = function() {
               // Remove the join_container. So the site doesn't look weird.
               join_container.remove()
               // parent = this. But it is not the join_button
-              // It is (MEME_CHAT = this).
               parent.create_chat()
             }
           }else{
@@ -255,8 +253,7 @@ window.onload = function() {
             return
           }
   
-          // OK! SO IF YOU'RE A ROOKIE CODER. THIS IS GOING TO BE
-          // SUPER EASY-ISH! I THINK. MAYBE NOT. WE'LL SEE!
+          
   
           // convert the message object values to an array.
           var messages = Object.values(messages_object.val());
@@ -326,7 +323,7 @@ window.onload = function() {
       }
     }
     // So we've "built" our app. Let's make it work!!
-    var app = new MEME_CHAT()
+    var app = new DOC_CHAT()
     // If we have a name stored in localStorage.
     // Then use that name. Otherwise , if not.
     // Go to home.
