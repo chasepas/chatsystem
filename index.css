@@ -6,8 +6,6 @@ body{
   
     overflow: hidden;
     animation: blur 0.5s ease-out;
-    width: 264px;
-    height: 217px;
   }
   *{
     outline: none;
@@ -112,8 +110,8 @@ body{
   }
   
   #chat_container{
-    width: 200px;
-    height: 200px;
+    width: 100%;
+    height: 450px;
   
     display: flex;
     justify-content: center;
@@ -125,12 +123,12 @@ body{
   
   }
   #chat_inner_container{
-    width: 100%;
+    width: 40%;
     height: 100%;
   }
   #chat_content_container{
     width: 100%;
-    height: 50%;
+    height: 90%;
   
     float: left;
     overflow-y: auto;

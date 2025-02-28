@@ -17,6 +17,7 @@ window.onload = function() {
     var db = firebase.database()
     // We're going to use oBjEcT OrIeNtEd PrOgRaMmInG. Lol
     class DOC_CHAT{
+      badWords: ["badword1", "badword2", "anotherbadword"];
       // Home() is used to create the home page
       home(){
         // First clear the body before adding in
