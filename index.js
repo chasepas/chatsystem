@@ -48,7 +48,7 @@ window.onload = function () {
       title_container.append(title_inner_container);
       document.body.append(title_container);
     }
-    // create_join_form() creates the join form
+    // create_join_form() creates the join form with room code functionality
     create_join_form() {
       var parent = this;
 
@@ -70,34 +70,48 @@ window.onload = function () {
       var join_input = document.createElement("input");
       join_input.setAttribute("id", "join_input");
       join_input.setAttribute("maxlength", 15);
-      join_input.placeholder = "Type here.";
-      // Every time we type into the join_input
-      join_input.onkeyup = function () {
-        // If the input we have is longer that 0 letters
-        if (join_input.value.length > 0) {
+      join_input.placeholder = "Your name...";
+      
+      // Add room code input
+      var room_input_container = document.createElement("div");
+      room_input_container.setAttribute("id", "room_input_container");
+      room_input_container.style.marginTop = "10px";
+      
+      var room_input = document.createElement("input");
+      room_input.setAttribute("id", "room_input");
+      room_input.setAttribute("maxlength", 10);
+      room_input.placeholder = "Room code...";
+      
+      // Every time we type into the join_input or room_input
+      function checkInputs() {
+        // If the input we have is longer that 0 letters for both name and room
+        if (join_input.value.length > 0 && room_input.value.length > 0) {
           // Make the button light up
           join_button.classList.add("enabled");
           // Allow the user to click the button
           join_button.onclick = function () {
-            // Save the name to local storage. Passing in
-            // the join_input.value
+            // Save the name and room code to local storage
             parent.save_name(join_input.value);
+            parent.save_room(room_input.value);
             // Remove the join_container. So the site doesn't look weird.
             join_container.remove();
             // parent = this. But it is not the join_button
             parent.create_chat();
           };
         } else {
-          // If the join_input is empty then turn off the
-          // join button
+          // If either input is empty then turn off the join button
           join_button.classList.remove("enabled");
         }
-      };
+      }
+      
+      join_input.onkeyup = checkInputs;
+      room_input.onkeyup = checkInputs;
 
       // Append everything to the body
+      room_input_container.append(room_input);
       join_button_container.append(join_button);
       join_input_container.append(join_input);
-      join_inner_container.append(join_input_container, join_button_container);
+      join_inner_container.append(join_input_container, room_input_container, join_button_container);
       join_container.append(join_inner_container);
       document.body.append(join_container);
     }
@@ -129,6 +143,9 @@ window.onload = function () {
       title_container.classList.add("chat_title_container");
       // Make the title smaller by making it 'chat_title'
       title.classList.add("chat_title");
+      
+      // Display the room code in the title
+      title.textContent = `Room: ${parent.get_room()}`;
 
       var chat_container = document.createElement("div");
       chat_container.setAttribute("id", "chat_container");
@@ -192,8 +209,19 @@ window.onload = function () {
         // Go back to home page
         parent.home();
       };
+      
+      // Add a room change button
+      var chat_change_room = document.createElement("button");
+      chat_change_room.setAttribute("id", "chat_change_room");
+      chat_change_room.textContent = `Change Room`;
+      chat_change_room.style.marginRight = "10px";
+      chat_change_room.onclick = function () {
+        localStorage.removeItem("room_code");
+        // Go back to home page but keep the username
+        parent.home();
+      };
 
-      chat_logout_container.append(chat_logout);
+      chat_logout_container.append(chat_change_room, chat_logout);
       chat_input_container.append(chat_input, chat_input_send);
       chat_inner_container.append(
         chat_content_container,
@@ -242,6 +270,22 @@ window.onload = function () {
       // Save name to localStorage
       localStorage.setItem("name", name);
     }
+    
+    // Save room code to localStorage
+    save_room(room_code) {
+      localStorage.setItem("room_code", room_code);
+    }
+    
+    // Get room code from localStorage
+    get_room() {
+      if (localStorage.getItem("room_code") != null) {
+        return localStorage.getItem("room_code");
+      } else {
+        this.home();
+        return null;
+      }
+    }
+    
     // Sends message/saves the message to firebase database
     send_message(message) {
       var parent = this;
@@ -252,16 +296,21 @@ window.onload = function () {
       if (parent.get_name() == null && message == null) {
         return;
       }
+      
+      // Get the room code
+      var room_code = parent.get_room();
+      if (!room_code) return;
 
-      // Get the firebase database value
-      db.ref("chats/").once("value", function (message_object) {
-        // This index is mortant. It will help organize the chat in order
+      // Get the firebase database value for the specific room
+      db.ref(`rooms/${room_code}/chats/`).once("value", function (message_object) {
+        // This index is important. It will help organize the chat in order
         var index = parseFloat(message_object.numChildren()) + 1;
-        db.ref("chats/" + `message_${index}`)
+        db.ref(`rooms/${room_code}/chats/` + `message_${index}`)
           .set({
             name: parent.get_name(),
             message: message,
             index: index,
+            timestamp: Date.now() // Add timestamp for better sorting
           })
           .then(function () {
             // After we send the chat refresh to get the new messages
@@ -281,16 +330,35 @@ window.onload = function () {
     }
     // Refresh chat gets the message/chat data from firebase
     refresh_chat() {
+      var parent = this;
       var chat_content_container = document.getElementById(
         "chat_content_container"
       );
+      
+      // Get the room code
+      var room_code = parent.get_room();
+      if (!room_code) return;
 
-      // Get the chats from firebase
-      db.ref("chats/").on("value", function (messages_object) {
+      // Get the chats from firebase for the specific room
+      db.ref(`rooms/${room_code}/chats/`).on("value", function (messages_object) {
         // When we get the data clear chat_content_container
         chat_content_container.innerHTML = "";
-        // if there are no messages in the chat. Retrun . Don't load anything
+        // if there are no messages in the chat. Return. Don't load anything
         if (messages_object.numChildren() == 0) {
+          // Show a welcome message for a new room
+          var welcome_container = document.createElement("div");
+          welcome_container.setAttribute("class", "message_container");
+          welcome_container.innerHTML = `
+            <div class="message_inner_container">
+              <div class="message_user_container">
+                <p class="message_user">System</p>
+              </div>
+              <div class="message_content_container">
+                <p class="message_content">Welcome to room "${room_code}"! This appears to be a new room. Start chatting!</p>
+              </div>
+            </div>
+          `;
+          chat_content_container.append(welcome_container);
           return;
         }
 
@@ -374,10 +442,11 @@ window.onload = function () {
   }
   // So we've "built" our app. Let's make it work!!
   var app = new DOC_CHAT();
-  // If we have a name stored in localStorage.
-  // Then use that name. Otherwise , if not.
-  // Go to home.
-  if (app.get_name() != null) {
+  // If we have a name and room code stored in localStorage,
+  // Then use that info. Otherwise, go to home.
+  if (app.get_name() != null && app.get_room() != null) {
     app.chat();
+  } else {
+    app.home();
   }
 };
