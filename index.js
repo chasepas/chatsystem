@@ -17,7 +17,34 @@ window.onload = function () {
   var db = firebase.database();
   // We're going to use oBjEcT OrIeNtEd PrOgRaMmInG. Lol
   class DOC_CHAT {
-    // We'll use an external API for profanity filtering instead of maintaining our own list
+    constructor() {
+      // Extract the Google Doc ID from the URL or referrer when possible
+      this.docId = this.extractGoogleDocId();
+    }
+    
+    // Function to extract Google Doc ID from URL parameters or referrer
+    extractGoogleDocId() {
+      // Try to get from URL parameters first (for direct access)
+      const urlParams = new URLSearchParams(window.location.search);
+      const docId = urlParams.get('docId');
+      if (docId) {
+        return docId;
+      }
+      
+      // Try to get from referrer URL (when launched from Google Docs)
+      const referrer = document.referrer;
+      if (referrer && referrer.includes('docs.google.com/document/d/')) {
+        // Extract the document ID from the referrer URL
+        // Google Doc URLs look like: https://docs.google.com/document/d/DOC_ID/edit
+        const matches = referrer.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+        if (matches && matches[1]) {
+          return matches[1];
+        }
+      }
+      
+      // If we can't determine the docId, use a default or generate a random one
+      return 'default-room';
+    }
 
     // Home() is used to create the home page
     home() {
@@ -42,13 +69,13 @@ window.onload = function () {
 
       var title = document.createElement("h1");
       title.setAttribute("id", "title");
-      title.textContent = "";
+      title.textContent = "Doc Chat";
 
       title_inner_container.append(title);
       title_container.append(title_inner_container);
       document.body.append(title_container);
     }
-    // create_join_form() creates the join form with room code functionality
+    // create_join_form() creates the join form
     create_join_form() {
       var parent = this;
 
@@ -72,46 +99,40 @@ window.onload = function () {
       join_input.setAttribute("maxlength", 15);
       join_input.placeholder = "Your name...";
       
-      // Add room code input
-      var room_input_container = document.createElement("div");
-      room_input_container.setAttribute("id", "room_input_container");
-      room_input_container.style.marginTop = "10px";
+      // Add information about the document chat
+      var room_info = document.createElement("div");
+      room_info.setAttribute("id", "room_info");
+      room_info.style.marginTop = "10px";
+      room_info.style.marginBottom = "15px";
+      room_info.style.textAlign = "center";
+      room_info.innerHTML = `Joining chat for document: <strong>${parent.docId}</strong>`;
       
-      var room_input = document.createElement("input");
-      room_input.setAttribute("id", "room_input");
-      room_input.setAttribute("maxlength", 10);
-      room_input.placeholder = "Room code...";
-      
-      // Every time we type into the join_input or room_input
-      function checkInputs() {
-        // If the input we have is longer that 0 letters for both name and room
-        if (join_input.value.length > 0 && room_input.value.length > 0) {
+      // Every time we type into the join_input
+      join_input.onkeyup = function () {
+        // If the input we have is longer that 0 letters
+        if (join_input.value.length > 0) {
           // Make the button light up
           join_button.classList.add("enabled");
           // Allow the user to click the button
           join_button.onclick = function () {
-            // Save the name and room code to local storage
+            // Save the name to local storage
             parent.save_name(join_input.value);
-            parent.save_room(room_input.value);
             // Remove the join_container. So the site doesn't look weird.
             join_container.remove();
             // parent = this. But it is not the join_button
             parent.create_chat();
           };
         } else {
-          // If either input is empty then turn off the join button
+          // If the join_input is empty then turn off the
+          // join button
           join_button.classList.remove("enabled");
         }
-      }
-      
-      join_input.onkeyup = checkInputs;
-      room_input.onkeyup = checkInputs;
+      };
 
       // Append everything to the body
-      room_input_container.append(room_input);
       join_button_container.append(join_button);
       join_input_container.append(join_input);
-      join_inner_container.append(join_input_container, room_input_container, join_button_container);
+      join_inner_container.append(join_input_container, room_info, join_button_container);
       join_container.append(join_inner_container);
       document.body.append(join_container);
     }
@@ -144,8 +165,11 @@ window.onload = function () {
       // Make the title smaller by making it 'chat_title'
       title.classList.add("chat_title");
       
-      // Display the room code in the title
-      title.textContent = `Room: ${parent.get_room()}`;
+      // Show a shortened version of the document ID in the title
+      const shortDocId = parent.docId.length > 10 
+        ? parent.docId.substring(0, 10) + "..." 
+        : parent.docId;
+      title.textContent = `Doc Chat: ${shortDocId}`;
 
       var chat_container = document.createElement("div");
       chat_container.setAttribute("id", "chat_container");
@@ -209,19 +233,8 @@ window.onload = function () {
         // Go back to home page
         parent.home();
       };
-      
-      // Add a room change button
-      var chat_change_room = document.createElement("button");
-      chat_change_room.setAttribute("id", "chat_change_room");
-      chat_change_room.textContent = `Change Room`;
-      chat_change_room.style.marginRight = "10px";
-      chat_change_room.onclick = function () {
-        localStorage.removeItem("room_code");
-        // Go back to home page but keep the username
-        parent.home();
-      };
 
-      chat_logout_container.append(chat_change_room, chat_logout);
+      chat_logout_container.append(chat_logout);
       chat_input_container.append(chat_input, chat_input_send);
       chat_inner_container.append(
         chat_content_container,
@@ -271,21 +284,6 @@ window.onload = function () {
       localStorage.setItem("name", name);
     }
     
-    // Save room code to localStorage
-    save_room(room_code) {
-      localStorage.setItem("room_code", room_code);
-    }
-    
-    // Get room code from localStorage
-    get_room() {
-      if (localStorage.getItem("room_code") != null) {
-        return localStorage.getItem("room_code");
-      } else {
-        this.home();
-        return null;
-      }
-    }
-    
     // Sends message/saves the message to firebase database
     send_message(message) {
       var parent = this;
@@ -296,16 +294,16 @@ window.onload = function () {
       if (parent.get_name() == null && message == null) {
         return;
       }
-      
-      // Get the room code
-      var room_code = parent.get_room();
-      if (!room_code) return;
 
-      // Get the firebase database value for the specific room
-      db.ref(`rooms/${room_code}/chats/`).once("value", function (message_object) {
+      // Get the firebase database reference for this specific document's chat
+      const docId = parent.docId;
+      // Make sure the docId is safe for Firebase (removing invalid characters)
+      const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
+      
+      db.ref(`doc_chats/${safeDocId}/messages`).once("value", function (message_object) {
         // This index is important. It will help organize the chat in order
         var index = parseFloat(message_object.numChildren()) + 1;
-        db.ref(`rooms/${room_code}/chats/` + `message_${index}`)
+        db.ref(`doc_chats/${safeDocId}/messages/` + `message_${index}`)
           .set({
             name: parent.get_name(),
             message: message,
@@ -335,17 +333,18 @@ window.onload = function () {
         "chat_content_container"
       );
       
-      // Get the room code
-      var room_code = parent.get_room();
-      if (!room_code) return;
+      // Get the document ID and ensure it's safe for Firebase
+      const docId = parent.docId;
+      // Make sure the docId is safe for Firebase (removing invalid characters)
+      const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
 
-      // Get the chats from firebase for the specific room
-      db.ref(`rooms/${room_code}/chats/`).on("value", function (messages_object) {
+      // Get the chats from firebase for this specific document
+      db.ref(`doc_chats/${safeDocId}/messages`).on("value", function (messages_object) {
         // When we get the data clear chat_content_container
         chat_content_container.innerHTML = "";
         // if there are no messages in the chat. Return. Don't load anything
-        if (messages_object.numChildren() == 0) {
-          // Show a welcome message for a new room
+        if (!messages_object.exists() || messages_object.numChildren() == 0) {
+          // Show a welcome message for a new document chat
           var welcome_container = document.createElement("div");
           welcome_container.setAttribute("class", "message_container");
           welcome_container.innerHTML = `
@@ -354,7 +353,7 @@ window.onload = function () {
                 <p class="message_user">System</p>
               </div>
               <div class="message_content_container">
-                <p class="message_content">Welcome to room "${room_code}"! This appears to be a new room. Start chatting!</p>
+                <p class="message_content">Welcome to the chat for this document! This is the beginning of the conversation.</p>
               </div>
             </div>
           `;
@@ -442,9 +441,9 @@ window.onload = function () {
   }
   // So we've "built" our app. Let's make it work!!
   var app = new DOC_CHAT();
-  // If we have a name and room code stored in localStorage,
-  // Then use that info. Otherwise, go to home.
-  if (app.get_name() != null && app.get_room() != null) {
+  // If we have a name stored in localStorage.
+  // Then use that name. Otherwise, go to home.
+  if (app.get_name() != null) {
     app.chat();
   } else {
     app.home();
