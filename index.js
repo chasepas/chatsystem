@@ -20,6 +20,8 @@ window.onload = function () {
     constructor() {
       // Extract the Google Doc ID from the URL or referrer when possible
       this.docId = this.extractGoogleDocId();
+      // Initialize custom filter list (default empty)
+      this.customFilterWords = this.getCustomFilterWords();
     }
     
     // Function to extract Google Doc ID from URL parameters or referrer
@@ -44,6 +46,18 @@ window.onload = function () {
       
       // If we can't determine the docId, use a default or generate a random one
       return 'default-room';
+    }
+
+    // Get custom filter words from localStorage
+    getCustomFilterWords() {
+      const savedWords = localStorage.getItem('customFilterWords');
+      return savedWords ? JSON.parse(savedWords) : [];
+    }
+    
+    // Save custom filter words to localStorage
+    saveCustomFilterWords(wordsList) {
+      localStorage.setItem('customFilterWords', JSON.stringify(wordsList));
+      this.customFilterWords = wordsList;
     }
 
     // Home() is used to create the home page
@@ -233,8 +247,16 @@ window.onload = function () {
         // Go back to home page
         parent.home();
       };
+      
+      // Create filter settings button
+      var filter_settings = document.createElement("button");
+      filter_settings.setAttribute("id", "filter_settings");
+      filter_settings.innerHTML = '<i class="fas fa-filter"></i> Filter Settings';
+      filter_settings.onclick = function() {
+        parent.show_filter_settings();
+      };
 
-      chat_logout_container.append(chat_logout);
+      chat_logout_container.append(filter_settings, chat_logout);
       chat_input_container.append(chat_input, chat_input_send);
       chat_inner_container.append(
         chat_content_container,
@@ -248,33 +270,150 @@ window.onload = function () {
       // then we "refresh" and get the chat data from Firebase
       parent.refresh_chat();
     }
+    
+    // Show filter settings modal
+    show_filter_settings() {
+      var parent = this;
+      
+      // Create modal container
+      var modal = document.createElement("div");
+      modal.setAttribute("id", "filter_modal");
+      modal.style.position = "fixed";
+      modal.style.top = "0";
+      modal.style.left = "0";
+      modal.style.width = "100%";
+      modal.style.height = "100%";
+      modal.style.backgroundColor = "rgba(0,0,0,0.5)";
+      modal.style.display = "flex";
+      modal.style.justifyContent = "center";
+      modal.style.alignItems = "center";
+      modal.style.zIndex = "1000";
+      
+      // Create modal content
+      var modalContent = document.createElement("div");
+      modalContent.setAttribute("id", "filter_modal_content");
+      modalContent.style.backgroundColor = "white";
+      modalContent.style.padding = "20px";
+      modalContent.style.borderRadius = "5px";
+      modalContent.style.maxWidth = "500px";
+      modalContent.style.width = "80%";
+      
+      // Create modal header
+      var modalHeader = document.createElement("div");
+      modalHeader.style.display = "flex";
+      modalHeader.style.justifyContent = "space-between";
+      modalHeader.style.marginBottom = "15px";
+      
+      var modalTitle = document.createElement("h2");
+      modalTitle.textContent = "Custom Filter Settings";
+      
+      var closeButton = document.createElement("button");
+      closeButton.innerHTML = "&times;";
+      closeButton.style.background = "none";
+      closeButton.style.border = "none";
+      closeButton.style.fontSize = "24px";
+      closeButton.style.cursor = "pointer";
+      closeButton.onclick = function() {
+        document.body.removeChild(modal);
+      };
+      
+      modalHeader.append(modalTitle, closeButton);
+      
+      // Create filter words textarea
+      var filterLabel = document.createElement("p");
+      filterLabel.textContent = "Enter words to filter (one per line):";
+      
+      var filterTextarea = document.createElement("textarea");
+      filterTextarea.setAttribute("id", "filter_words_input");
+      filterTextarea.style.width = "100%";
+      filterTextarea.style.height = "150px";
+      filterTextarea.style.marginBottom = "15px";
+      filterTextarea.style.padding = "8px";
+      filterTextarea.value = parent.customFilterWords.join('\n');
+      
+      // Create save button
+      var saveButton = document.createElement("button");
+      saveButton.textContent = "Save Filter Settings";
+      saveButton.style.padding = "8px 16px";
+      saveButton.style.backgroundColor = "#4CAF50";
+      saveButton.style.color = "white";
+      saveButton.style.border = "none";
+      saveButton.style.borderRadius = "4px";
+      saveButton.style.cursor = "pointer";
+      saveButton.onclick = function() {
+        // Get words from textarea, split by newlines, and filter empty items
+        const filterWords = filterTextarea.value
+          .split('\n')
+          .map(word => word.trim())
+          .filter(word => word.length > 0);
+        
+        // Save the custom filter words
+        parent.saveCustomFilterWords(filterWords);
+        
+        // Close the modal
+        document.body.removeChild(modal);
+      };
+      
+      // Assemble the modal
+      modalContent.append(modalHeader, filterLabel, filterTextarea, saveButton);
+      modal.append(modalContent);
+      document.body.append(modal);
+    }
 
-    // Filter message to remove swear words using PurgoMalum API
+    // Filter message to remove swear words using PurgoMalum API AND custom filter
     async filter_message(message) {
       if (!message) return message;
+      let filtered_message = message;
 
       try {
-        // Use the PurgoMalum API to filter profanity
-        // This is a free API that filters profanity and returns clean text
+        // First apply the PurgoMalum API to filter common profanity
         const response = await fetch(
           `https://www.purgomalum.com/service/json?text=${encodeURIComponent(
-            message
+            filtered_message
           )}`
         );
         const data = await response.json();
-        console.log("data", data);
-
-        // Return the filtered message
-        return data.result;
+        filtered_message = data.result;
+        
+        // Then apply the custom filter
+        if (this.customFilterWords && this.customFilterWords.length > 0) {
+          // Create a regex pattern for all custom filter words with word boundaries
+          // This ensures we only match whole words, not parts of words
+          const pattern = new RegExp(
+            '\\b(' + 
+            this.customFilterWords.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + 
+            ')\\b', 
+            'gi'
+          );
+          
+          // Replace matched words with asterisks of the same length
+          filtered_message = filtered_message.replace(pattern, match => 
+            '*'.repeat(match.length)
+          );
+        }
+        
+        return filtered_message;
       } catch (error) {
         console.error("Error filtering message:", error);
 
         // Fallback to a simple asterisk replacement for common profanity patterns
         // This is just in case the API fails
-        return message.replace(
+        filtered_message = message.replace(
           /\b(f+u+c+k+|s+h+i+t+|b+i+t+c+h+)\b/gi,
           (match) => "*".repeat(match.length)
         );
+        
+        // Still apply the custom filter even if the API fails
+        if (this.customFilterWords && this.customFilterWords.length > 0) {
+          this.customFilterWords.forEach(word => {
+            if (word.trim().length > 0) {
+              const pattern = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
+              filtered_message = filtered_message.replace(pattern, match => '*'.repeat(match.length));
+            }
+          });
+        }
+        
+        return filtered_message;
       }
     }
 
