@@ -20,8 +20,10 @@ window.onload = function () {
     constructor() {
       // Extract the Google Doc ID from the URL or referrer when possible
       this.docId = this.extractGoogleDocId();
-      // Initialize custom filter list (default empty)
-      this.customFilterWords = this.getCustomFilterWords();
+      // Initialize filter words (will be loaded from Firebase)
+      this.filterWords = [];
+      // Track if user is admin (for filter editing permissions)
+      this.isAdmin = false;
     }
     
     // Function to extract Google Doc ID from URL parameters or referrer
@@ -48,16 +50,75 @@ window.onload = function () {
       return 'default-room';
     }
 
-    // Get custom filter words from localStorage
-    getCustomFilterWords() {
-      const savedWords = localStorage.getItem('customFilterWords');
-      return savedWords ? JSON.parse(savedWords) : [];
+    // Get Firebase safe document ID
+    getSafeDocId() {
+      return this.docId.replace(/[.#$/[\]]/g, '_');
+    }
+
+    // Load filter words from Firebase for this specific chat room
+    loadFilterWords() {
+      const parent = this;
+      const safeDocId = this.getSafeDocId();
+      
+      return new Promise((resolve) => {
+        db.ref(`doc_chats/${safeDocId}/filter_words`).once("value", function(snapshot) {
+          if (snapshot.exists()) {
+            parent.filterWords = snapshot.val();
+          } else {
+            parent.filterWords = [];
+          }
+          resolve(parent.filterWords);
+        });
+      });
     }
     
-    // Save custom filter words to localStorage
-    saveCustomFilterWords(wordsList) {
-      localStorage.setItem('customFilterWords', JSON.stringify(wordsList));
-      this.customFilterWords = wordsList;
+    // Save filter words to Firebase for this specific chat room
+    saveFilterWords(wordsList) {
+      const safeDocId = this.getSafeDocId();
+      db.ref(`doc_chats/${safeDocId}/filter_words`).set(wordsList);
+      this.filterWords = wordsList;
+    }
+
+    // Check if user is admin for this chat room
+    checkIsAdmin() {
+      const parent = this;
+      const safeDocId = this.getSafeDocId();
+      const userName = this.get_name();
+      
+      return new Promise((resolve) => {
+        db.ref(`doc_chats/${safeDocId}/admins`).once("value", function(snapshot) {
+          if (snapshot.exists()) {
+            const admins = snapshot.val();
+            parent.isAdmin = admins.includes(userName);
+          } else {
+            // If no admins are set, make the first user an admin
+            db.ref(`doc_chats/${safeDocId}/admins`).set([userName]);
+            parent.isAdmin = true;
+          }
+          resolve(parent.isAdmin);
+        });
+      });
+    }
+
+    // Add a user as admin
+    addAdmin(userName) {
+      if (!this.isAdmin) return Promise.resolve(false);
+      
+      const safeDocId = this.getSafeDocId();
+      return new Promise((resolve) => {
+        db.ref(`doc_chats/${safeDocId}/admins`).once("value", function(snapshot) {
+          let admins = [];
+          if (snapshot.exists()) {
+            admins = snapshot.val();
+          }
+          
+          if (!admins.includes(userName)) {
+            admins.push(userName);
+            db.ref(`doc_chats/${safeDocId}/admins`).set(admins);
+          }
+          resolve(true);
+        });
+      });
     }
 
     // Home() is used to create the home page
@@ -68,11 +129,19 @@ window.onload = function () {
       this.create_title();
       this.create_join_form();
     }
+    
     // chat() is used to create the chat page
     chat() {
+      const parent = this;
       this.create_title();
-      this.create_chat();
+      
+      // Load filter words and check if user is admin before creating chat
+      Promise.all([this.loadFilterWords(), this.checkIsAdmin()])
+        .then(() => {
+          parent.create_chat();
+        });
     }
+    
     // create_title() is used to create the title
     create_title() {
       // This is the title creator. 🎉
@@ -89,6 +158,7 @@ window.onload = function () {
       title_container.append(title_inner_container);
       document.body.append(title_container);
     }
+    
     // create_join_form() creates the join form
     create_join_form() {
       var parent = this;
@@ -134,7 +204,7 @@ window.onload = function () {
             // Remove the join_container. So the site doesn't look weird.
             join_container.remove();
             // parent = this. But it is not the join_button
-            parent.create_chat();
+            parent.chat();
           };
         } else {
           // If the join_input is empty then turn off the
@@ -150,6 +220,7 @@ window.onload = function () {
       join_container.append(join_inner_container);
       document.body.append(join_container);
     }
+    
     // create_load() creates a loading circle that is used in the chat container
     create_load(container_id) {
       // YOU ALSO MUST HAVE (PARENT = THIS). BUT IT'S WHATEVER THO.
@@ -168,6 +239,7 @@ window.onload = function () {
       loader_container.append(loader);
       container.append(loader_container);
     }
+    
     // create_chat() creates the chat container and stuff
     create_chat() {
       // Again! You need to have (parent = this)
@@ -256,6 +328,17 @@ window.onload = function () {
         parent.show_filter_settings();
       };
 
+      // Create an admin button if user is admin
+      if (parent.isAdmin) {
+        var admin_button = document.createElement("button");
+        admin_button.setAttribute("id", "admin_button");
+        admin_button.innerHTML = '<i class="fas fa-user-shield"></i> Admin';
+        admin_button.onclick = function() {
+          parent.show_admin_panel();
+        };
+        chat_logout_container.append(admin_button);
+      }
+
       chat_logout_container.append(filter_settings, chat_logout);
       chat_input_container.append(chat_input, chat_input_send);
       chat_inner_container.append(
@@ -295,296 +378,4 @@ window.onload = function () {
       modalContent.style.backgroundColor = "white";
       modalContent.style.padding = "20px";
       modalContent.style.borderRadius = "5px";
-      modalContent.style.maxWidth = "500px";
-      modalContent.style.width = "80%";
-      
-      // Create modal header
-      var modalHeader = document.createElement("div");
-      modalHeader.style.display = "flex";
-      modalHeader.style.justifyContent = "space-between";
-      modalHeader.style.marginBottom = "15px";
-      
-      var modalTitle = document.createElement("h2");
-      modalTitle.textContent = "Custom Filter Settings";
-      
-      var closeButton = document.createElement("button");
-      closeButton.innerHTML = "&times;";
-      closeButton.style.background = "none";
-      closeButton.style.border = "none";
-      closeButton.style.fontSize = "24px";
-      closeButton.style.cursor = "pointer";
-      closeButton.onclick = function() {
-        document.body.removeChild(modal);
-      };
-      
-      modalHeader.append(modalTitle, closeButton);
-      
-      // Create filter words textarea
-      var filterLabel = document.createElement("p");
-      filterLabel.textContent = "Enter words to filter (one per line):";
-      
-      var filterTextarea = document.createElement("textarea");
-      filterTextarea.setAttribute("id", "filter_words_input");
-      filterTextarea.style.width = "100%";
-      filterTextarea.style.height = "150px";
-      filterTextarea.style.marginBottom = "15px";
-      filterTextarea.style.padding = "8px";
-      filterTextarea.value = parent.customFilterWords.join('\n');
-      
-      // Create save button
-      var saveButton = document.createElement("button");
-      saveButton.textContent = "Save Filter Settings";
-      saveButton.style.padding = "8px 16px";
-      saveButton.style.backgroundColor = "#4CAF50";
-      saveButton.style.color = "white";
-      saveButton.style.border = "none";
-      saveButton.style.borderRadius = "4px";
-      saveButton.style.cursor = "pointer";
-      saveButton.onclick = function() {
-        // Get words from textarea, split by newlines, and filter empty items
-        const filterWords = filterTextarea.value
-          .split('\n')
-          .map(word => word.trim())
-          .filter(word => word.length > 0);
-        
-        // Save the custom filter words
-        parent.saveCustomFilterWords(filterWords);
-        
-        // Close the modal
-        document.body.removeChild(modal);
-      };
-      
-      // Assemble the modal
-      modalContent.append(modalHeader, filterLabel, filterTextarea, saveButton);
-      modal.append(modalContent);
-      document.body.append(modal);
-    }
-
-    // Filter message to remove swear words using PurgoMalum API AND custom filter
-    async filter_message(message) {
-      if (!message) return message;
-      let filtered_message = message;
-
-      try {
-        // First apply the PurgoMalum API to filter common profanity
-        const response = await fetch(
-          `https://www.purgomalum.com/service/json?text=${encodeURIComponent(
-            filtered_message
-          )}`
-        );
-        const data = await response.json();
-        filtered_message = data.result;
-        
-        // Then apply the custom filter
-        if (this.customFilterWords && this.customFilterWords.length > 0) {
-          // Create a regex pattern for all custom filter words with word boundaries
-          // This ensures we only match whole words, not parts of words
-          const pattern = new RegExp(
-            '\\b(' + 
-            this.customFilterWords.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + 
-            ')\\b', 
-            'gi'
-          );
-          
-          // Replace matched words with asterisks of the same length
-          filtered_message = filtered_message.replace(pattern, match => 
-            '*'.repeat(match.length)
-          );
-        }
-        
-        return filtered_message;
-      } catch (error) {
-        console.error("Error filtering message:", error);
-
-        // Fallback to a simple asterisk replacement for common profanity patterns
-        // This is just in case the API fails
-        filtered_message = message.replace(
-          /\b(f+u+c+k+|s+h+i+t+|b+i+t+c+h+)\b/gi,
-          (match) => "*".repeat(match.length)
-        );
-        
-        // Still apply the custom filter even if the API fails
-        if (this.customFilterWords && this.customFilterWords.length > 0) {
-          this.customFilterWords.forEach(word => {
-            if (word.trim().length > 0) {
-              const pattern = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
-              filtered_message = filtered_message.replace(pattern, match => '*'.repeat(match.length));
-            }
-          });
-        }
-        
-        return filtered_message;
-      }
-    }
-
-    // Save name. It literally saves the name to localStorage
-    save_name(name) {
-      // Save name to localStorage
-      localStorage.setItem("name", name);
-    }
-    
-    // Sends message/saves the message to firebase database
-    send_message(message) {
-      var parent = this;
-      // if the local storage name is null and there is no message
-      // then return/don't send the message. The user is somehow hacking
-      // to send messages. Or they just deleted the
-      // localstorage themselves. But hacking sounds cooler!!
-      if (parent.get_name() == null && message == null) {
-        return;
-      }
-
-      // Get the firebase database reference for this specific document's chat
-      const docId = parent.docId;
-      // Make sure the docId is safe for Firebase (removing invalid characters)
-      const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
-      
-      db.ref(`doc_chats/${safeDocId}/messages`).once("value", function (message_object) {
-        // This index is important. It will help organize the chat in order
-        var index = parseFloat(message_object.numChildren()) + 1;
-        db.ref(`doc_chats/${safeDocId}/messages/` + `message_${index}`)
-          .set({
-            name: parent.get_name(),
-            message: message,
-            index: index,
-            timestamp: Date.now() // Add timestamp for better sorting
-          })
-          .then(function () {
-            // After we send the chat refresh to get the new messages
-            parent.refresh_chat();
-          });
-      });
-    }
-    // Get name. Gets the username from localStorage
-    get_name() {
-      // Get the name from localstorage
-      if (localStorage.getItem("name") != null) {
-        return localStorage.getItem("name");
-      } else {
-        this.home();
-        return null;
-      }
-    }
-    // Refresh chat gets the message/chat data from firebase
-    refresh_chat() {
-      var parent = this;
-      var chat_content_container = document.getElementById(
-        "chat_content_container"
-      );
-      
-      // Get the document ID and ensure it's safe for Firebase
-      const docId = parent.docId;
-      // Make sure the docId is safe for Firebase (removing invalid characters)
-      const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
-
-      // Get the chats from firebase for this specific document
-      db.ref(`doc_chats/${safeDocId}/messages`).on("value", function (messages_object) {
-        // When we get the data clear chat_content_container
-        chat_content_container.innerHTML = "";
-        // if there are no messages in the chat. Return. Don't load anything
-        if (!messages_object.exists() || messages_object.numChildren() == 0) {
-          // Show a welcome message for a new document chat
-          var welcome_container = document.createElement("div");
-          welcome_container.setAttribute("class", "message_container");
-          welcome_container.innerHTML = `
-            <div class="message_inner_container">
-              <div class="message_user_container">
-                <p class="message_user">System</p>
-              </div>
-              <div class="message_content_container">
-                <p class="message_content">Welcome to the chat for this document! This is the beginning of the conversation.</p>
-              </div>
-            </div>
-          `;
-          chat_content_container.append(welcome_container);
-          return;
-        }
-
-        // convert the message object values to an array.
-        var messages = Object.values(messages_object.val());
-        var guide = []; // this will be our guide to organizing the messages
-        var unordered = []; // unordered messages
-        var ordered = []; // we're going to order these messages
-
-        for (var i, i = 0; i < messages.length; i++) {
-          // The guide is simply an array from 0 to the messages.length
-          guide.push(i + 1);
-          // unordered is the [message, index_of_the_message]
-          unordered.push([messages[i], messages[i].index]);
-        }
-
-        // Now this is straight up from stack overflow 🤣
-        // Sort the unordered messages by the guide
-        guide.forEach(function (key) {
-          var found = false;
-          unordered = unordered.filter(function (item) {
-            if (!found && item[1] == key) {
-              // Now push the ordered messages to ordered array
-              ordered.push(item[0]);
-              found = true;
-              return false;
-            } else {
-              return true;
-            }
-          });
-        });
-
-        // Now we're done. Simply display the ordered messages
-        ordered.forEach(function (data) {
-          var name = data.name;
-          var message = data.message;
-
-          var message_container = document.createElement("div");
-          message_container.setAttribute("class", "message_container");
-
-          var message_inner_container = document.createElement("div");
-          message_inner_container.setAttribute(
-            "class",
-            "message_inner_container"
-          );
-
-          var message_user_container = document.createElement("div");
-          message_user_container.setAttribute(
-            "class",
-            "message_user_container"
-          );
-
-          var message_user = document.createElement("p");
-          message_user.setAttribute("class", "message_user");
-          message_user.textContent = `${name}`;
-
-          var message_content_container = document.createElement("div");
-          message_content_container.setAttribute(
-            "class",
-            "message_content_container"
-          );
-
-          var message_content = document.createElement("p");
-          message_content.setAttribute("class", "message_content");
-          message_content.textContent = `${message}`;
-
-          message_user_container.append(message_user);
-          message_content_container.append(message_content);
-          message_inner_container.append(
-            message_user_container,
-            message_content_container
-          );
-          message_container.append(message_inner_container);
-
-          chat_content_container.append(message_container);
-        });
-        // Go to the recent message at the bottom of the container
-        chat_content_container.scrollTop = chat_content_container.scrollHeight;
-      });
-    }
-  }
-  // So we've "built" our app. Let's make it work!!
-  var app = new DOC_CHAT();
-  // If we have a name stored in localStorage.
-  // Then use that name. Otherwise, go to home.
-  if (app.get_name() != null) {
-    app.chat();
-  } else {
-    app.home();
-  }
-};
+      modalContent.style
