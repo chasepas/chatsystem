@@ -20,6 +20,8 @@ window.onload = function () {
     constructor() {
       // Extract the Google Doc ID from the URL or referrer when possible
       this.docId = this.extractGoogleDocId();
+      // Track the message that is being replied to
+      this.replyingTo = null;
     }
     
     // Function to extract Google Doc ID from URL parameters or referrer
@@ -183,6 +185,23 @@ window.onload = function () {
       var chat_input_container = document.createElement("div");
       chat_input_container.setAttribute("id", "chat_input_container");
 
+      // Create reply indicator container
+      var reply_indicator = document.createElement("div");
+      reply_indicator.setAttribute("id", "reply_indicator");
+      reply_indicator.style.display = "none";
+      
+      var reply_text = document.createElement("span");
+      reply_text.setAttribute("id", "reply_text");
+      
+      var cancel_reply = document.createElement("button");
+      cancel_reply.setAttribute("id", "cancel_reply");
+      cancel_reply.innerHTML = "×";
+      cancel_reply.onclick = function() {
+        parent.cancelReply();
+      };
+      
+      reply_indicator.append(reply_text, cancel_reply);
+
       var chat_input_send = document.createElement("button");
       chat_input_send.setAttribute("id", "chat_input_send");
       chat_input_send.setAttribute("disabled", true);
@@ -213,6 +232,8 @@ window.onload = function () {
             });
             // Clear the chat input box
             chat_input.value = "";
+            // Clear the reply if there is one
+            parent.cancelReply();
             // Focus on the input just after
             chat_input.focus();
           };
@@ -235,7 +256,7 @@ window.onload = function () {
       };
 
       chat_logout_container.append(chat_logout);
-      chat_input_container.append(chat_input, chat_input_send);
+      chat_input_container.append(reply_indicator, chat_input, chat_input_send);
       chat_inner_container.append(
         chat_content_container,
         chat_input_container,
@@ -243,10 +264,118 @@ window.onload = function () {
       );
       chat_container.append(chat_inner_container);
       document.body.append(chat_container);
+      
+      // Add CSS for reply functionality
+      this.addReplyStyles();
+      
       // After creating the chat. We immediatly create a loading circle in the 'chat_content_container'
       parent.create_load("chat_content_container");
       // then we "refresh" and get the chat data from Firebase
       parent.refresh_chat();
+    }
+    
+    // Add CSS styles for the reply functionality
+    addReplyStyles() {
+      const style = document.createElement('style');
+      style.textContent = `
+        #reply_indicator {
+          display: flex;
+          align-items: center;
+          background-color: #f1f1f1;
+          padding: 5px 10px;
+          margin-bottom: 5px;
+          border-radius: 5px;
+          width: 100%;
+        }
+        
+        #reply_text {
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 0.8em;
+          color: #555;
+        }
+        
+        #cancel_reply {
+          background: none;
+          border: none;
+          color: #999;
+          font-size: 16px;
+          cursor: pointer;
+          padding: 0 5px;
+        }
+        
+        #cancel_reply:hover {
+          color: #333;
+        }
+        
+        .reply_button {
+          background: none;
+          border: none;
+          color: #777;
+          font-size: 12px;
+          cursor: pointer;
+          padding: 2px 5px;
+          margin-top: 5px;
+          text-align: right;
+        }
+        
+        .reply_button:hover {
+          color: #333;
+          text-decoration: underline;
+        }
+        
+        .replied_message {
+          background-color: #f8f8f8;
+          border-left: 3px solid #ddd;
+          padding: 5px;
+          margin-bottom: 5px;
+          font-size: 0.85em;
+          color: #666;
+        }
+        
+        .replied_user {
+          font-weight: bold;
+          color: #555;
+        }
+        
+        .message_actions {
+          display: flex;
+          justify-content: flex-end;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Set up a reply to a specific message
+    setReply(messageId, userName, messageContent) {
+      const parent = this;
+      parent.replyingTo = messageId;
+      
+      // Display the reply indicator
+      const replyIndicator = document.getElementById('reply_indicator');
+      const replyText = document.getElementById('reply_text');
+      
+      // Truncate long messages for the reply indicator
+      const truncatedContent = messageContent.length > 50 
+        ? messageContent.substring(0, 47) + '...' 
+        : messageContent;
+      
+      replyText.textContent = `Replying to ${userName}: ${truncatedContent}`;
+      replyIndicator.style.display = 'flex';
+      
+      // Focus on the input
+      document.getElementById('chat_input').focus();
+    }
+    
+    // Cancel the current reply
+    cancelReply() {
+      this.replyingTo = null;
+      const replyIndicator = document.getElementById('reply_indicator');
+      if (replyIndicator) {
+        replyIndicator.style.display = 'none';
+      }
     }
 
     // Filter message to remove swear words using PurgoMalum API
@@ -269,7 +398,7 @@ window.onload = function () {
       } catch (error) {
         console.error("Error filtering message:", error);
 
-        // Fallback to a simple asterisk replacement for common profanity patterns
+       // Fallback to a simple asterisk replacement for common profanity patterns
         // This is just in case the API fails
         return message.replace(
           /\b(f+u+c+k+|s+h+i+t+|b+i+t+c+h+)\b/gi,
@@ -303,19 +432,31 @@ window.onload = function () {
       db.ref(`doc_chats/${safeDocId}/messages`).once("value", function (message_object) {
         // This index is important. It will help organize the chat in order
         var index = parseFloat(message_object.numChildren()) + 1;
+        
+        // Create the message object with basic properties
+        const messageData = {
+          name: parent.get_name(),
+          message: message,
+          index: index,
+          timestamp: Date.now()
+        };
+        
+        // If this is a reply, add the reply information
+        if (parent.replyingTo) {
+          messageData.isReply = true;
+          messageData.replyTo = parent.replyingTo;
+        }
+        
+        // Save to Firebase
         db.ref(`doc_chats/${safeDocId}/messages/` + `message_${index}`)
-          .set({
-            name: parent.get_name(),
-            message: message,
-            index: index,
-            timestamp: Date.now() // Add timestamp for better sorting
-          })
+          .set(messageData)
           .then(function () {
             // After we send the chat refresh to get the new messages
             parent.refresh_chat();
           });
       });
     }
+    
     // Get name. Gets the username from localStorage
     get_name() {
       // Get the name from localstorage
@@ -326,6 +467,33 @@ window.onload = function () {
         return null;
       }
     }
+    
+    // Create a reply button for a message
+    create_reply_button(messageId, userName, messageContent) {
+      const parent = this;
+      const replyButton = document.createElement("button");
+      replyButton.setAttribute("class", "reply_button");
+      replyButton.innerHTML = "Reply";
+      replyButton.onclick = function() {
+        parent.setReply(messageId, userName, messageContent);
+      };
+      return replyButton;
+    }
+    
+    // Create a replied message element to show what message is being replied to
+    create_replied_message(repliedMessage) {
+      if (!repliedMessage) return null;
+      
+      const repliedContainer = document.createElement("div");
+      repliedContainer.setAttribute("class", "replied_message");
+      
+      const repliedContent = document.createElement("div");
+      repliedContent.innerHTML = `<span class="replied_user">${repliedMessage.name}:</span> ${repliedMessage.message}`;
+      
+      repliedContainer.append(repliedContent);
+      return repliedContainer;
+    }
+    
     // Refresh chat gets the message/chat data from firebase
     refresh_chat() {
       var parent = this;
@@ -366,12 +534,15 @@ window.onload = function () {
         var guide = []; // this will be our guide to organizing the messages
         var unordered = []; // unordered messages
         var ordered = []; // we're going to order these messages
+        var messagesById = {}; // messages indexed by their ID for quick lookup
 
         for (var i, i = 0; i < messages.length; i++) {
           // The guide is simply an array from 0 to the messages.length
           guide.push(i + 1);
           // unordered is the [message, index_of_the_message]
           unordered.push([messages[i], messages[i].index]);
+          // Store messages by their ID for reply lookups
+          messagesById[`message_${messages[i].index}`] = messages[i];
         }
 
         // Now this is straight up from stack overflow 🤣
@@ -394,9 +565,11 @@ window.onload = function () {
         ordered.forEach(function (data) {
           var name = data.name;
           var message = data.message;
-
+          var messageId = `message_${data.index}`;
+          
           var message_container = document.createElement("div");
           message_container.setAttribute("class", "message_container");
+          message_container.setAttribute("id", messageId);
 
           var message_inner_container = document.createElement("div");
           message_inner_container.setAttribute(
@@ -419,16 +592,34 @@ window.onload = function () {
             "class",
             "message_content_container"
           );
+          
+          // If this message is a reply to another message, show the replied message
+          if (data.isReply && data.replyTo && messagesById[data.replyTo]) {
+            const repliedMessage = messagesById[data.replyTo];
+            const repliedEl = parent.create_replied_message(repliedMessage);
+            if (repliedEl) {
+              message_content_container.append(repliedEl);
+            }
+          }
 
           var message_content = document.createElement("p");
           message_content.setAttribute("class", "message_content");
           message_content.textContent = `${message}`;
+          
+          // Message actions container (for reply button)
+          var message_actions = document.createElement("div");
+          message_actions.setAttribute("class", "message_actions");
+          
+          // Create reply button
+          var reply_button = parent.create_reply_button(messageId, name, message);
+          message_actions.append(reply_button);
 
           message_user_container.append(message_user);
           message_content_container.append(message_content);
           message_inner_container.append(
             message_user_container,
-            message_content_container
+            message_content_container,
+            message_actions
           );
           message_container.append(message_inner_container);
 
