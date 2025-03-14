@@ -20,6 +20,8 @@ window.onload = function () {
     constructor() {
       // Extract the Google Doc ID from the URL or referrer when possible
       this.docId = this.extractGoogleDocId();
+      // Track the message that is being replied to
+      this.replyingTo = null;
     }
     
     // Function to extract Google Doc ID from URL parameters or referrer
@@ -183,6 +185,28 @@ window.onload = function () {
       var chat_input_container = document.createElement("div");
       chat_input_container.setAttribute("id", "chat_input_container");
 
+      // Create reply indicator container
+      var reply_indicator = document.createElement("div");
+      reply_indicator.setAttribute("id", "reply_indicator");
+      reply_indicator.style.display = "none";
+      
+      var reply_text = document.createElement("span");
+      reply_text.setAttribute("id", "reply_text");
+      
+      var reply_view_button = document.createElement("button");
+      reply_view_button.setAttribute("id", "reply_view_button");
+      reply_view_button.textContent = "View";
+      reply_view_button.style.display = "none"; // Hide initially, will be shown when replying
+      
+      var cancel_reply = document.createElement("button");
+      cancel_reply.setAttribute("id", "cancel_reply");
+      cancel_reply.innerHTML = "×";
+      cancel_reply.onclick = function() {
+        parent.cancelReply();
+      };
+      
+      reply_indicator.append(reply_text, reply_view_button, cancel_reply);
+
       var chat_input_send = document.createElement("button");
       chat_input_send.setAttribute("id", "chat_input_send");
       chat_input_send.setAttribute("disabled", true);
@@ -213,6 +237,8 @@ window.onload = function () {
             });
             // Clear the chat input box
             chat_input.value = "";
+            // Clear the reply if there is one
+            parent.cancelReply();
             // Focus on the input just after
             chat_input.focus();
           };
@@ -235,7 +261,7 @@ window.onload = function () {
       };
 
       chat_logout_container.append(chat_logout);
-      chat_input_container.append(chat_input, chat_input_send);
+      chat_input_container.append(reply_indicator, chat_input, chat_input_send);
       chat_inner_container.append(
         chat_content_container,
         chat_input_container,
@@ -243,10 +269,223 @@ window.onload = function () {
       );
       chat_container.append(chat_inner_container);
       document.body.append(chat_container);
+      
+      // Add CSS for reply functionality
+      this.addReplyStyles();
+      
       // After creating the chat. We immediatly create a loading circle in the 'chat_content_container'
       parent.create_load("chat_content_container");
       // then we "refresh" and get the chat data from Firebase
       parent.refresh_chat();
+    }
+    
+    // Add CSS styles for the reply functionality
+    addReplyStyles() {
+      const style = document.createElement('style');
+      style.textContent = `
+        #reply_indicator {
+          display: flex;
+          align-items: center;
+          background-color: #f1f1f1;
+          padding: 5px 10px;
+          margin-bottom: 5px;
+          border-radius: 5px;
+          width: 100%;
+        }
+        
+        #reply_text {
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 0.8em;
+          color: #555;
+        }
+        
+        #reply_view_button {
+          background-color: #e0e0e0;
+          border: none;
+          border-radius: 3px;
+          color: #555;
+          cursor: pointer;
+          font-size: 12px;
+          margin-right: 5px;
+          padding: 2px 6px;
+        }
+        
+        #reply_view_button:hover {
+          background-color: #d0d0d0;
+        }
+        
+        #cancel_reply {
+          background: none;
+          border: none;
+          color: #999;
+          font-size: 16px;
+          cursor: pointer;
+          padding: 0 5px;
+        }
+        
+        #cancel_reply:hover {
+          color: #333;
+        }
+        
+        .reply_button {
+          background: none;
+          border: none;
+          color: #777;
+          font-size: 12px;
+          cursor: pointer;
+          padding: 2px 5px;
+          margin-top: 5px;
+          text-align: right;
+        }
+        
+        .reply_button:hover {
+          color: #333;
+          text-decoration: underline;
+        }
+        
+        .replied_message {
+          background-color: #f0f4f8;
+          border-left: 3px solid #7eb0db;
+          padding: 5px 8px;
+          margin-bottom: 8px;
+          font-size: 0.9em;
+          color: #444;
+          border-radius: 3px;
+          cursor: pointer;
+          position: relative;
+        }
+        
+        .replied_message:hover {
+          background-color: #e8f0f8;
+        }
+        
+        .replied_message:after {
+          content: "▼";
+          position: absolute;
+          bottom: -12px;
+          left: 15px;
+          color: #7eb0db;
+          font-size: 16px;
+          line-height: 16px;
+        }
+        
+        .replied_user {
+          font-weight: bold;
+          color: #3b5998;
+        }
+        
+        .message_actions {
+          display: flex;
+          justify-content: flex-end;
+        }
+        
+        .message_container.has_replies {
+          border-left: 2px solid #7eb0db;
+          padding-left: 3px;
+        }
+        
+        .message_container.is_reply {
+          margin-left: 15px;
+          border-left: 2px solid #7eb0db;
+          padding-left: 3px;
+        }
+        
+        .message_container.highlight {
+          animation: highlight-animation 2s ease-in-out;
+        }
+        
+        @keyframes highlight-animation {
+          0% { background-color: rgba(255, 255, 150, 0.5); }
+          100% { background-color: transparent; }
+        }
+        @keyframes highlight-animation {
+          0% { background-color: rgba(255, 255, 150, 0.5); }
+          100% { background-color: transparent; }
+        }
+        
+        /* Thread view styles */
+        .thread_line {
+          width: 2px;
+          background-color: #7eb0db;
+          position: absolute;
+          left: 15px;
+          top: 0;
+          bottom: 0;
+          opacity: 0.6;
+        }
+        
+        .reply_count_badge {
+          background-color: #7eb0db;
+          color: white;
+          border-radius: 10px;
+          padding: 1px 6px;
+          font-size: 0.7em;
+          margin-left: 5px;
+          display: inline-block;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Set up a reply to a specific message
+    setReply(messageId, userName, messageContent) {
+      const parent = this;
+      parent.replyingTo = messageId;
+      
+      // Display the reply indicator
+      const replyIndicator = document.getElementById('reply_indicator');
+      const replyText = document.getElementById('reply_text');
+      const replyViewButton = document.getElementById('reply_view_button');
+      
+      // Truncate long messages for the reply indicator
+      const truncatedContent = messageContent.length > 50 
+        ? messageContent.substring(0, 47) + '...' 
+        : messageContent;
+      
+      replyText.textContent = `Replying to ${userName}: ${truncatedContent}`;
+      replyIndicator.style.display = 'flex';
+      
+      // Show and set up the View button
+      replyViewButton.style.display = 'block';
+      replyViewButton.onclick = function() {
+        parent.scrollToMessage(messageId);
+      };
+      
+      // Focus on the input
+      document.getElementById('chat_input').focus();
+    }
+    
+    // Scroll to a specific message and highlight it
+    scrollToMessage(messageId) {
+      const messageEl = document.getElementById(messageId);
+      if (messageEl) {
+        // Scroll the message into view
+        messageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Add and then remove highlight class for animation effect
+        messageEl.classList.add('highlight');
+        setTimeout(() => {
+          messageEl.classList.remove('highlight');
+        }, 2000);
+      }
+    }
+    
+    // Cancel the current reply
+    cancelReply() {
+      this.replyingTo = null;
+      const replyIndicator = document.getElementById('reply_indicator');
+      const replyViewButton = document.getElementById('reply_view_button');
+      
+      if (replyIndicator) {
+        replyIndicator.style.display = 'none';
+      }
+      
+      if (replyViewButton) {
+        replyViewButton.style.display = 'none';
+      }
     }
 
     // Filter message to remove swear words using PurgoMalum API
@@ -303,19 +542,50 @@ window.onload = function () {
       db.ref(`doc_chats/${safeDocId}/messages`).once("value", function (message_object) {
         // This index is important. It will help organize the chat in order
         var index = parseFloat(message_object.numChildren()) + 1;
+        
+        // Create the message object with basic properties
+        const messageData = {
+          name: parent.get_name(),
+          message: message,
+          index: index,
+          timestamp: Date.now()
+        };
+        
+        // If this is a reply, add the reply information
+        if (parent.replyingTo) {
+          messageData.isReply = true;
+          messageData.replyTo = parent.replyingTo;
+          
+          // Update the original message to include this as a reply
+          const replyingToIndex = parent.replyingTo.split('_')[1];
+          const replyUpdates = {};
+          
+          // First, check if the message being replied to already has replies
+          db.ref(`doc_chats/${safeDocId}/messages/message_${replyingToIndex}`).once("value", function(originalMessageSnapshot) {
+            if (originalMessageSnapshot.exists()) {
+              const originalMessage = originalMessageSnapshot.val();
+              
+              // Create or update the replies array
+              let replies = originalMessage.replies || [];
+              replies.push(`message_${index}`);
+              
+              // Update the original message with the new reply reference
+              replyUpdates[`/replies`] = replies;
+              db.ref(`doc_chats/${safeDocId}/messages/message_${replyingToIndex}`).update(replyUpdates);
+            }
+          });
+        }
+        
+        // Save the new message to Firebase
         db.ref(`doc_chats/${safeDocId}/messages/` + `message_${index}`)
-          .set({
-            name: parent.get_name(),
-            message: message,
-            index: index,
-            timestamp: Date.now() // Add timestamp for better sorting
-          })
+          .set(messageData)
           .then(function () {
             // After we send the chat refresh to get the new messages
             parent.refresh_chat();
           });
       });
     }
+    
     // Get name. Gets the username from localStorage
     get_name() {
       // Get the name from localstorage
@@ -326,6 +596,40 @@ window.onload = function () {
         return null;
       }
     }
+    
+    // Create a reply button for a message
+    create_reply_button(messageId, userName, messageContent) {
+      const parent = this;
+      const replyButton = document.createElement("button");
+      replyButton.setAttribute("class", "reply_button");
+      replyButton.innerHTML = "Reply";
+      replyButton.onclick = function() {
+        parent.setReply(messageId, userName, messageContent);
+      };
+      return replyButton;
+    }
+    
+    // Create a replied message element to show what message is being replied to
+    create_replied_message(repliedMessage, replyToMsgId) {
+      if (!repliedMessage) return null;
+      
+      const parent = this;
+      const repliedContainer = document.createElement("div");
+      repliedContainer.setAttribute("class", "replied_message");
+      
+      const repliedContent = document.createElement("div");
+      repliedContent.innerHTML = `<span class="replied_user">${repliedMessage.name}:</span> ${repliedMessage.message}`;
+      
+      repliedContainer.append(repliedContent);
+      
+      // Make the replied message clickable to navigate to the original
+      repliedContainer.onclick = function() {
+        parent.scrollToMessage(replyToMsgId);
+      };
+      
+      return repliedContainer;
+    }
+    
     // Refresh chat gets the message/chat data from firebase
     refresh_chat() {
       var parent = this;
@@ -366,12 +670,15 @@ window.onload = function () {
         var guide = []; // this will be our guide to organizing the messages
         var unordered = []; // unordered messages
         var ordered = []; // we're going to order these messages
+        var messagesById = {}; // messages indexed by their ID for quick lookup
 
         for (var i, i = 0; i < messages.length; i++) {
           // The guide is simply an array from 0 to the messages.length
           guide.push(i + 1);
           // unordered is the [message, index_of_the_message]
           unordered.push([messages[i], messages[i].index]);
+          // Store messages by their ID for reply lookups
+          messagesById[`message_${messages[i].index}`] = messages[i];
         }
 
         // Now this is straight up from stack overflow 🤣
@@ -394,9 +701,20 @@ window.onload = function () {
         ordered.forEach(function (data) {
           var name = data.name;
           var message = data.message;
-
+          var messageId = `message_${data.index}`;
+          
           var message_container = document.createElement("div");
           message_container.setAttribute("class", "message_container");
+          message_container.setAttribute("id", messageId);
+          
+          // Add appropriate classes based on reply status
+          if (data.isReply) {
+            message_container.classList.add("is_reply");
+          }
+          
+          if (data.replies && data.replies.length > 0) {
+            message_container.classList.add("has_replies");
+          }
 
           var message_inner_container = document.createElement("div");
           message_inner_container.setAttribute(
@@ -413,22 +731,48 @@ window.onload = function () {
           var message_user = document.createElement("p");
           message_user.setAttribute("class", "message_user");
           message_user.textContent = `${name}`;
+          
+          // If this message has replies, show the count
+          if (data.replies && data.replies.length > 0) {
+            const replyCountBadge = document.createElement("span");
+            replyCountBadge.className = "reply_count_badge";
+            replyCountBadge.textContent = data.replies.length;
+            message_user.appendChild(replyCountBadge);
+          }
 
           var message_content_container = document.createElement("div");
           message_content_container.setAttribute(
             "class",
             "message_content_container"
           );
+          
+          // If this message is a reply to another message, show the replied message
+          if (data.isReply && data.replyTo && messagesById[data.replyTo]) {
+            const repliedMessage = messagesById[data.replyTo];
+            const repliedEl = parent.create_replied_message(repliedMessage, data.replyTo);
+            if (repliedEl) {
+              message_content_container.append(repliedEl);
+            }
+          }
 
           var message_content = document.createElement("p");
           message_content.setAttribute("class", "message_content");
           message_content.textContent = `${message}`;
+          
+          // Message actions container (for reply button)
+          var message_actions = document.createElement("div");
+          message_actions.setAttribute("class", "message_actions");
+          
+          // Create reply button
+          var reply_button = parent.create_reply_button(messageId, name, message);
+          message_actions.append(reply_button);
 
           message_user_container.append(message_user);
           message_content_container.append(message_content);
           message_inner_container.append(
             message_user_container,
-            message_content_container
+            message_content_container,
+            message_actions
           );
           message_container.append(message_inner_container);
 
