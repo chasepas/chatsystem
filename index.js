@@ -449,3 +449,242 @@ window.onload = function () {
     app.home();
   }
 };
+
+
+// NEW CODE 
+
+// We enclose this in window.onload.
+// So we don't have ridiculous errors.
+window.onload = function () {
+  // Your web app's Firebase configuration
+  var firebaseConfig = {
+    apiKey: "AIzaSyALfdyCH5E4DQp2cA2AVeQ7XWP7Aa2fF2w",
+    authDomain: "chat-8c5e5.firebaseapp.com",
+    projectId: "chat-8c5e5",
+    storageBucket: "chat-8c5e5.firebasestorage.app",
+    messagingSenderId: "775152032980",
+    appId: "1:775152032980:web:143b4fd6d604c86dbe6f41",
+    measurementId: "G-G2SMKSX5Y4",
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  // This is very IMPORTANT!! We're going to use "db" a lot.
+  var db = firebase.database();
+  // We're going to use oBjEcT OrIeNtEd PrOgRaMmInG. Lol
+  class DOC_CHAT {
+    constructor() {
+      // Extract the Google Doc ID from the URL or referrer when possible
+      this.docId = this.extractGoogleDocId();
+      // Add theme state to localStorage
+      this.initializeTheme();
+    }
+    
+    // Initialize theme from localStorage or default to light mode
+    initializeTheme() {
+      const savedTheme = localStorage.getItem('docChatTheme');
+      if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+      } else {
+        document.body.classList.remove('dark-mode');
+      }
+    }
+    
+    // Toggle between light and dark mode
+    toggleTheme() {
+      document.body.classList.toggle('dark-mode');
+      
+      // Save theme preference to localStorage
+      const isDarkMode = document.body.classList.contains('dark-mode');
+      localStorage.setItem('docChatTheme', isDarkMode ? 'dark' : 'light');
+    }
+
+    // Existing methods remain the same...
+    // (Previous extractGoogleDocId, home, chat, etc. methods)
+
+    // Modify create_chat to add theme toggle button
+    create_chat() {
+      var parent = this;
+      // Call the existing create_chat method
+      // First, run the original create_chat logic
+      var originalCreateChat = () => {
+        // GET THAT MEMECHAT HEADER OUTTA HERE
+        var title_container = document.getElementById("title_container");
+        var title = document.getElementById("title");
+        title_container.classList.add("chat_title_container");
+        // Make the title smaller by making it 'chat_title'
+        title.classList.add("chat_title");
+        
+        // Show a shortened version of the document ID in the title
+        const shortDocId = parent.docId.length > 10 
+          ? parent.docId.substring(0, 10) + "..." 
+          : parent.docId;
+        title.textContent = `Doc Chat: ${shortDocId}`;
+
+        var chat_container = document.createElement("div");
+        chat_container.setAttribute("id", "chat_container");
+
+        var chat_inner_container = document.createElement("div");
+        chat_inner_container.setAttribute("id", "chat_inner_container");
+
+        var chat_content_container = document.createElement("div");
+        chat_content_container.setAttribute("id", "chat_content_container");
+
+        var chat_input_container = document.createElement("div");
+        chat_input_container.setAttribute("id", "chat_input_container");
+
+        var chat_input_send = document.createElement("button");
+        chat_input_send.setAttribute("id", "chat_input_send");
+        chat_input_send.setAttribute("disabled", true);
+        chat_input_send.innerHTML = `<h1>></h1>`;
+
+        var chat_input = document.createElement("input");
+        chat_input.setAttribute("id", "chat_input");
+        // Only a max message length of 1000
+        chat_input.setAttribute("maxlength", 1000);
+        // Get the name of the user
+        chat_input.placeholder = `${parent.get_name()}. Say something...`;
+        chat_input.onkeyup = function () {
+          if (chat_input.value.length > 0) {
+            chat_input_send.removeAttribute("disabled");
+            chat_input_send.classList.add("enabled");
+            chat_input_send.onclick = function () {
+              chat_input_send.setAttribute("disabled", true);
+              chat_input_send.classList.remove("enabled");
+              if (chat_input.value.length <= 0) {
+                return;
+              }
+              // Enable the loading circle in the 'chat_content_container'
+              parent.create_load("chat_content_container");
+              // Filter the message before sending (handling the async operation)
+              parent.filter_message(chat_input.value).then((filtered_message) => {
+                // Send the filtered message
+                parent.send_message(filtered_message);
+              });
+              // Clear the chat input box
+              chat_input.value = "";
+              // Focus on the input just after
+              chat_input.focus();
+            };
+          } else {
+            chat_input_send.classList.remove("enabled");
+          }
+        };
+
+        var chat_logout_container = document.createElement("div");
+        chat_logout_container.setAttribute("id", "chat_logout_container");
+
+        var chat_logout = document.createElement("button");
+        chat_logout.setAttribute("id", "chat_logout");
+        chat_logout.textContent = `${parent.get_name()} • logout`;
+        // "Logout" is really just deleting the name from the localStorage
+        chat_logout.onclick = function () {
+          localStorage.clear();
+          // Go back to home page
+          parent.home();
+        };
+
+        // Create theme toggle button
+        var theme_toggle = document.createElement("button");
+        theme_toggle.setAttribute("id", "theme_toggle");
+        theme_toggle.innerHTML = document.body.classList.contains('dark-mode') 
+          ? '☀️ Light Mode' 
+          : '🌙 Dark Mode';
+        theme_toggle.onclick = function () {
+          parent.toggleTheme();
+          // Update button text based on current mode
+          theme_toggle.innerHTML = document.body.classList.contains('dark-mode') 
+            ? '☀️ Light Mode' 
+            : '🌙 Dark Mode';
+        };
+
+        chat_logout_container.append(chat_logout, theme_toggle);
+        chat_input_container.append(chat_input, chat_input_send);
+        chat_inner_container.append(
+          chat_content_container,
+          chat_input_container,
+          chat_logout_container
+        );
+        chat_container.append(chat_inner_container);
+        document.body.append(chat_container);
+        // After creating the chat. We immediately create a loading circle in the 'chat_content_container'
+        parent.create_load("chat_content_container");
+        // then we "refresh" and get the chat data from Firebase
+        parent.refresh_chat();
+      };
+
+      // Call the original create_chat logic
+      originalCreateChat();
+    }
+
+    // Rest of the methods remain the same...
+    // (Previous methods like filter_message, send_message, etc.)
+  }
+  
+  // Create a style tag for dark mode CSS
+  var style = document.createElement('style');
+  style.textContent = `
+    /* Dark Mode Styles */
+    body.dark-mode {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    
+    body.dark-mode #title_container {
+      background-color: #1e1e1e;
+    }
+    
+    body.dark-mode #chat_container {
+      background-color: #1e1e1e;
+    }
+    
+    body.dark-mode #chat_content_container {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    
+    body.dark-mode .message_container {
+      background-color: #2c2c2c;
+    }
+    
+    body.dark-mode .message_user {
+      color: #64b5f6;
+    }
+    
+    body.dark-mode .message_content {
+      color: #e0e0e0;
+    }
+    
+    body.dark-mode #chat_input {
+      background-color: #2c2c2c;
+      color: #e0e0e0;
+      border: 1px solid #444;
+    }
+    
+    body.dark-mode #theme_toggle {
+      background-color: #444;
+      color: #e0e0e0;
+    }
+    
+    /* Theme Toggle Button Styles */
+    #theme_toggle {
+      margin-left: 10px;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #f0f0f0;
+      color: #333;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // So we've "built" our app. Let's make it work!!
+  var app = new DOC_CHAT();
+  // If we have a name stored in localStorage.
+  // Then use that name. Otherwise, go to home.
+  if (app.get_name() != null) {
+    app.chat();
+  } else {
+    app.home();
+  }
+};
