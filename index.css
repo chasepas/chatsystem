@@ -1,7 +1,7 @@
 body{
   /* https://www.color-hex.com/color/d3d3d3 */
   background-color: #fff; /*#f6f6f6, EBEBD3, fafafa*/
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Open Sans", sans-serif;
   font-weight: 900;
 
   overflow: hidden;
@@ -78,7 +78,7 @@ body{
   height: 40px;
 
   color: #1D3354;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Open Sans", sans-serif;
   font-size: 15px;
   font-weight: bold;
   text-align: center;
@@ -103,7 +103,7 @@ body{
   width: 60%;
   height: 40px;
 
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Open Sans", sans-serif;
   font-size: 15px;
   font-weight: bold;
   text-align: center;
@@ -133,7 +133,7 @@ body{
 
   float: left;
   overflow-y: auto;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Open Sans", sans-serif;
 
   padding-left: 15px;
   padding-right: 15px;
@@ -148,7 +148,7 @@ body{
 
   padding-left: 15px;
   padding-right: 15px;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Open Sans", sans-serif;
   margin-top: 10px;
 }
 #chat_input{
@@ -282,7 +282,7 @@ body{
 }
 /* Track */
 ::-webkit-scrollbar-track {
-  background: #cccs;
+  background: #ccc;
 }
 /* Handle */
 ::-webkit-scrollbar-thumb {
