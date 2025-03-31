@@ -449,5 +449,3 @@ window.onload = function () {
     app.home();
   }
 };
-
-
