@@ -603,320 +603,34 @@ window.onload = function () {
   }
 };
 
-
-// We need to modify the DOC_CHAT class to add our history button functionality
-
-// Add this to your DOC_CHAT class
-/*
-ADD THIS TO YOUR DOC_CHAT CLASS:
----------------------------------------
-*/
-
-// Add this function to create the history button
-create_history_button() {
-  var parent = this;
+// Add this to the function that creates and displays messages in your chat
+function add_message_to_chat(message_data) {
+  // Your existing code for creating message elements
   
-  // Create history button
-  var history_button = document.createElement("button");
-  history_button.setAttribute("id", "history_button");
-  history_button.innerHTML = '<i class="fas fa-history"></i> History';
+  // Assuming you have a message container element like this:
+  var message_container = document.createElement("div");
+  message_container.className = "message-container";
+  message_container.style.position = "relative"; // Important for positioning the timestamp
   
-  // Style the button
-  history_button.style.position = "absolute";
-  history_button.style.top = "15px";
-  history_button.style.right = "15px";
-  history_button.style.padding = "8px 12px";
-  history_button.style.backgroundColor = "#4a76a8";
-  history_button.style.color = "white";
-  history_button.style.border = "none";
-  history_button.style.borderRadius = "4px";
-  history_button.style.cursor = "pointer";
-  history_button.style.fontWeight = "bold";
-  history_button.style.zIndex = "100";
-  history_button.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+  // Create the message content elements as you normally would
+  // ...
   
-  // Button hover effects
-  history_button.onmouseover = function() {
-    this.style.backgroundColor = "#3a5b8c";
-  };
-  history_button.onmouseout = function() {
-    this.style.backgroundColor = "#4a76a8";
-  };
+  // Add timestamp element
+  var timestamp_elem = document.createElement("span");
+  timestamp_elem.className = "message-timestamp";
+  var time = new Date(message_data.timestamp || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  timestamp_elem.textContent = time;
   
-  // Set up click handler
-  history_button.onclick = function() {
-    parent.show_chat_history();
-  };
+  // Style the timestamp to appear in the top right
+  timestamp_elem.style.position = "absolute";
+  timestamp_elem.style.top = "5px";
+  timestamp_elem.style.right = "10px";
+  timestamp_elem.style.fontSize = "0.75em";
+  timestamp_elem.style.color = "#888";
+  timestamp_elem.style.fontWeight = "normal";
   
-  // Add button to title container to position it relative to the title
-  var title_container = document.getElementById("title_container");
-  title_container.style.position = "relative"; // Make sure positioning works
-  title_container.appendChild(history_button);
+  // Add the timestamp to the message container
+  message_container.appendChild(timestamp_elem);
+  
+  // Continue with your existing code to add the message to the chat area
 }
-
-// Function to show chat history modal
-show_chat_history() {
-  var parent = this;
-  
-  // Remove any existing modal first
-  var existingModal = document.getElementById("history_modal");
-  if (existingModal) {
-    document.body.removeChild(existingModal);
-  }
-  
-  // Create modal container
-  var modal = document.createElement("div");
-  modal.setAttribute("id", "history_modal");
-  modal.style.position = "fixed";
-  modal.style.zIndex = "1000";
-  modal.style.left = "0";
-  modal.style.top = "0";
-  modal.style.width = "100%";
-  modal.style.height = "100%";
-  modal.style.backgroundColor = "rgba(0,0,0,0.5)";
-  modal.style.display = "flex";
-  modal.style.justifyContent = "center";
-  modal.style.alignItems = "center";
-  
-  // Create modal content
-  var modal_content = document.createElement("div");
-  modal_content.setAttribute("id", "history_modal_content");
-  modal_content.style.backgroundColor = "white";
-  modal_content.style.padding = "20px";
-  modal_content.style.borderRadius = "8px";
-  modal_content.style.width = "80%";
-  modal_content.style.maxWidth = "800px";
-  modal_content.style.maxHeight = "80%";
-  modal_content.style.overflow = "auto";
-  modal_content.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)";
-  modal_content.style.position = "relative";
-  
-  // Create modal header
-  var modal_header = document.createElement("div");
-  modal_header.style.display = "flex";
-  modal_header.style.justifyContent = "space-between";
-  modal_header.style.alignItems = "center";
-  modal_header.style.marginBottom = "15px";
-  modal_header.style.borderBottom = "1px solid #eee";
-  modal_header.style.paddingBottom = "10px";
-  
-  var modal_title = document.createElement("h2");
-  modal_title.textContent = "Chat History";
-  modal_title.style.margin = "0";
-  modal_title.style.fontSize = "18px";
-  
-  var close_button = document.createElement("button");
-  close_button.innerHTML = "×";
-  close_button.style.background = "none";
-  close_button.style.border = "none";
-  close_button.style.fontSize = "24px";
-  close_button.style.cursor = "pointer";
-  close_button.style.padding = "0 5px";
-  
-  close_button.onclick = function(e) {
-    e.stopPropagation();
-    document.body.removeChild(modal);
-  };
-  
-  // Create history content container
-  var history_content = document.createElement("div");
-  history_content.setAttribute("id", "history_content");
-  
-  // Create loading indicator
-  var loading = document.createElement("div");
-  loading.textContent = "Loading chat history...";
-  loading.style.textAlign = "center";
-  loading.style.padding = "20px";
-  history_content.appendChild(loading);
-  
-  // Load chat history data
-  const docId = parent.docId;
-  const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
-  
-  // Access Firebase database
-  firebase.database().ref(`doc_chats/${safeDocId}/messages`).once("value", function(messages_object) {
-    // Clear loading indicator
-    history_content.innerHTML = "";
-    
-    if (!messages_object.exists() || messages_object.numChildren() == 0) {
-      history_content.innerHTML = "<p style='text-align:center'>No chat history available for this document.</p>";
-      return;
-    }
-    
-    // Get messages and sort by timestamp/index
-    var messages = Object.values(messages_object.val());
-    messages.sort((a, b) => a.index - b.index);
-    
-    // Create a messageMap for looking up replied messages
-    var messageMap = {};
-    messages.forEach(msg => {
-      messageMap[msg.index] = msg;
-    });
-    
-    // Create download button
-    var download_button = document.createElement("button");
-    download_button.textContent = "Download as CSV";
-    download_button.style.padding = "8px 12px";
-    download_button.style.backgroundColor = "#4CAF50";
-    download_button.style.color = "white";
-    download_button.style.border = "none";
-    download_button.style.borderRadius = "4px";
-    download_button.style.cursor = "pointer";
-    download_button.style.marginBottom = "15px";
-    download_button.style.marginRight = "10px";
-    
-    download_button.onclick = function(e) {
-      e.stopPropagation();
-      parent.download_chat_history(messages);
-    };
-    
-    // Create controls container
-    var controls = document.createElement("div");
-    controls.style.marginBottom = "15px";
-    controls.appendChild(download_button);
-    
-    history_content.appendChild(controls);
-    
-    // Create a table for the chat history
-    var table = document.createElement("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    
-    // Create table header
-    var thead = document.createElement("thead");
-    var headerRow = document.createElement("tr");
-    
-    ["Time", "User", "Message"].forEach(text => {
-      var th = document.createElement("th");
-      th.textContent = text;
-      th.style.padding = "10px";
-      th.style.borderBottom = "2px solid #ddd";
-      th.style.textAlign = "left";
-      headerRow.appendChild(th);
-    });
-    
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-    
-    // Create table body
-    var tbody = document.createElement("tbody");
-    
-    messages.forEach(function(data) {
-      var row = document.createElement("tr");
-      
-      // Time cell
-      var timeCell = document.createElement("td");
-      var date = new Date(data.timestamp || Date.now()); // Use current time as fallback
-      timeCell.textContent = date.toLocaleString();
-      timeCell.style.padding = "8px";
-      timeCell.style.borderBottom = "1px solid #ddd";
-      timeCell.style.whiteSpace = "nowrap";
-      timeCell.style.width = "150px";
-      row.appendChild(timeCell);
-      
-      // User cell
-      var userCell = document.createElement("td");
-      userCell.textContent = data.name;
-      userCell.style.padding = "8px";
-      userCell.style.borderBottom = "1px solid #ddd";
-      userCell.style.fontWeight = "bold";
-      userCell.style.width = "100px";
-      row.appendChild(userCell);
-      
-      // Message cell
-      var messageCell = document.createElement("td");
-      
-      // If this is a reply to another message
-      if (data.replyTo && messageMap[data.replyTo]) {
-        var replyInfo = messageMap[data.replyTo];
-        var replyDiv = document.createElement("div");
-        replyDiv.style.fontSize = "0.85em";
-        replyDiv.style.color = "#666";
-        replyDiv.style.marginBottom = "3px";
-        replyDiv.style.borderLeft = "2px solid #ccc";
-        replyDiv.style.paddingLeft = "6px";
-        
-        // Make sure we have valid message content for the reply
-        var replyMessage = replyInfo.message || "";
-        replyDiv.textContent = `Replying to ${replyInfo.name}: "${replyMessage.substring(0, 30)}${replyMessage.length > 30 ? '...' : ''}"`;
-        messageCell.appendChild(replyDiv);
-      }
-      
-      var messageText = document.createElement("div");
-      messageText.textContent = data.message || "";
-      messageCell.appendChild(messageText);
-      
-      messageCell.style.padding = "8px";
-      messageCell.style.borderBottom = "1px solid #ddd";
-      row.appendChild(messageCell);
-      
-      tbody.appendChild(row);
-    });
-    
-    table.appendChild(tbody);
-    history_content.appendChild(table);
-  });
-  
-  // Assemble the modal components
-  modal_header.append(modal_title, close_button);
-  modal_content.append(modal_header, history_content);
-  modal.append(modal_content);
-  document.body.append(modal);
-  
-  // Close modal when clicking outside
-  modal.onclick = function(event) {
-    if (event.target === modal) {
-      document.body.removeChild(modal);
-    }
-  };
-}
-
-// Function to download chat history as CSV
-download_chat_history(messages) {
-  // Create CSV content
-  let csv = 'Time,User,Message\n';
-  
-  messages.forEach(function(data) {
-    // Format the timestamp
-    const date = new Date(data.timestamp || Date.now()).toLocaleString();
-    
-    // Get message content or empty string if undefined
-    const message = data.message || "";
-    
-    // Escape and format the message (replace commas and quotes)
-    const escapedMessage = `"${message.replace(/"/g, '""')}"`;
-    
-    // Add row to CSV
-    csv += `"${date}","${data.name}",${escapedMessage}\n`;
-  });
-  
-  // Create download link
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.setAttribute('hidden', '');
-  a.setAttribute('href', url);
-  a.setAttribute('download', `chat_history_${this.docId.substring(0, 10)}_${new Date().toISOString().slice(0,10)}.csv`);
-  document.body.appendChild(a);
-  
-  // Trigger download
-  a.click();
-  
-  // Clean up
-  window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
-}
-
-/*
-END OF FUNCTIONS TO ADD TO DOC_CHAT CLASS
----------------------------------------
-*/
-
-// Now, modify the create_chat() method to add the history button
-// Add this line immediately after creating the title:
-// "title.textContent = `Doc Chat: ${shortDocId}`;" line
-
-
-// IMPORTANT: You need to add this line to your create_chat() method
-// Add this line after the title has been created and modified:
-// parent.create_history_button();
