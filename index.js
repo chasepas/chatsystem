@@ -602,3 +602,233 @@ window.onload = function () {
     app.home();
   }
 };
+
+// Add this method to the DOC_CHAT class
+create_history_button() {
+  var parent = this;
+  
+  // Create history button
+  var history_button = document.createElement("button");
+  history_button.setAttribute("id", "history_button");
+  history_button.innerHTML = '<i class="fas fa-history"></i> Chat History';
+  history_button.style.margin = "10px";
+  history_button.style.padding = "5px 10px";
+  history_button.style.backgroundColor = "#f0f0f0";
+  history_button.style.border = "1px solid #ddd";
+  history_button.style.borderRadius = "4px";
+  history_button.style.cursor = "pointer";
+  history_button.style.fontSize = "14px";
+  
+  // Add hover effect
+  history_button.onmouseover = function() {
+    this.style.backgroundColor = "#e0e0e0";
+  };
+  
+  history_button.onmouseout = function() {
+    this.style.backgroundColor = "#f0f0f0";
+  };
+  
+  // Add click event to show history modal
+  history_button.onclick = function() {
+    parent.show_chat_history();
+  };
+  
+  // Append to the chat container
+  var chat_logout_container = document.getElementById("chat_logout_container");
+  chat_logout_container.prepend(history_button);
+}
+
+// Method to show chat history
+show_chat_history() {
+  var parent = this;
+  
+  // Get the document ID and ensure it's safe for Firebase
+  const docId = parent.docId;
+  const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
+  
+  // Create modal container
+  var modal = document.createElement("div");
+  modal.setAttribute("id", "history_modal");
+  modal.style.position = "fixed";
+  modal.style.left = "0";
+  modal.style.top = "0";
+  modal.style.width = "100%";
+  modal.style.height = "100%";
+  modal.style.backgroundColor = "rgba(0,0,0,0.5)";
+  modal.style.display = "flex";
+  modal.style.justifyContent = "center";
+  modal.style.alignItems = "center";
+  modal.style.zIndex = "1000";
+  
+  // Create modal content
+  var modal_content = document.createElement("div");
+  modal_content.setAttribute("id", "history_modal_content");
+  modal_content.style.backgroundColor = "#fff";
+  modal_content.style.padding = "20px";
+  modal_content.style.borderRadius = "5px";
+  modal_content.style.width = "80%";
+  modal_content.style.maxWidth = "600px";
+  modal_content.style.maxHeight = "80%";
+  modal_content.style.overflow = "auto";
+  
+  // Modal header
+  var modal_header = document.createElement("div");
+  modal_header.style.display = "flex";
+  modal_header.style.justifyContent = "space-between";
+  modal_header.style.alignItems = "center";
+  modal_header.style.marginBottom = "15px";
+  
+  var modal_title = document.createElement("h2");
+  modal_title.textContent = "Chat History Summary";
+  modal_title.style.margin = "0";
+  
+  var close_button = document.createElement("button");
+  close_button.innerHTML = "×";
+  close_button.style.background = "none";
+  close_button.style.border = "none";
+  close_button.style.fontSize = "24px";
+  close_button.style.cursor = "pointer";
+  close_button.onclick = function() {
+    document.body.removeChild(modal);
+  };
+  
+  modal_header.append(modal_title, close_button);
+  
+  // Modal content - will be filled with history data
+  var history_content = document.createElement("div");
+  history_content.setAttribute("id", "history_content");
+  
+  // Loading indicator
+  var loading = document.createElement("p");
+  loading.textContent = "Loading chat history...";
+  history_content.append(loading);
+  
+  // Append all elements
+  modal_content.append(modal_header, history_content);
+  modal.append(modal_content);
+  document.body.append(modal);
+  
+  // Fetch chat history from Firebase
+  db.ref(`doc_chats/${safeDocId}/messages`).once("value", function(messages_object) {
+    history_content.innerHTML = "";
+    
+    if (!messages_object.exists() || messages_object.numChildren() == 0) {
+      history_content.innerHTML = "<p>No chat history available for this document.</p>";
+      return;
+    }
+    
+    // Process messages to generate summary
+    var messages = Object.values(messages_object.val());
+    
+    // Sort messages by index
+    messages.sort((a, b) => a.index - b.index);
+    
+    // Count messages per user
+    var userMessageCounts = {};
+    var totalMessages = messages.length;
+    
+    messages.forEach(msg => {
+      if (userMessageCounts[msg.name]) {
+        userMessageCounts[msg.name]++;
+      } else {
+        userMessageCounts[msg.name] = 1;
+      }
+    });
+    
+    // Create summary section
+    var summary_section = document.createElement("div");
+    summary_section.style.marginBottom = "20px";
+    
+    var total_messages_el = document.createElement("p");
+    total_messages_el.innerHTML = `<strong>Total messages:</strong> ${totalMessages}`;
+    
+    var participants_title = document.createElement("p");
+    participants_title.innerHTML = "<strong>Participants:</strong>";
+    
+    var participants_list = document.createElement("ul");
+    participants_list.style.marginTop = "5px";
+    
+    // Sort users by message count (most active first)
+    var sortedUsers = Object.keys(userMessageCounts).sort((a, b) => 
+      userMessageCounts[b] - userMessageCounts[a]
+    );
+    
+    sortedUsers.forEach(user => {
+      var user_item = document.createElement("li");
+      user_item.textContent = `${user}: ${userMessageCounts[user]} messages`;
+      participants_list.append(user_item);
+    });
+    
+    summary_section.append(total_messages_el, participants_title, participants_list);
+    
+    // Create timeline section
+    var timeline_section = document.createElement("div");
+    var timeline_title = document.createElement("h3");
+    timeline_title.textContent = "Recent Activity Timeline";
+    timeline_title.style.marginBottom = "10px";
+    
+    var timeline_list = document.createElement("ul");
+    timeline_list.style.listStyleType = "none";
+    timeline_list.style.padding = "0";
+    timeline_list.style.borderLeft = "2px solid #ddd";
+    timeline_list.style.marginLeft = "10px";
+    
+    // Show last 10 messages in timeline
+    var recentMessages = messages.slice(-10);
+    
+    recentMessages.forEach(msg => {
+      var time_item = document.createElement("li");
+      time_item.style.paddingLeft = "20px";
+      time_item.style.position = "relative";
+      time_item.style.marginBottom = "15px";
+      
+      // Add timeline dot
+      var timeline_dot = document.createElement("div");
+      timeline_dot.style.position = "absolute";
+      timeline_dot.style.left = "-5px";
+      timeline_dot.style.top = "0";
+      timeline_dot.style.width = "8px";
+      timeline_dot.style.height = "8px";
+      timeline_dot.style.borderRadius = "50%";
+      timeline_dot.style.backgroundColor = "#4682B4";
+      
+      // Format timestamp
+      var timestamp = new Date(msg.timestamp);
+      var formattedTime = timestamp.toLocaleString();
+      
+      // Create message content
+      var message_text = document.createElement("div");
+      message_text.innerHTML = `<strong>${msg.name}</strong> (${formattedTime}): `;
+      
+      // Truncate message if too long
+      var messageContent = msg.message.length > 50 ? 
+        msg.message.substring(0, 50) + "..." : 
+        msg.message;
+      
+      message_text.innerHTML += messageContent;
+      
+      // Add reply info if present
+      if (msg.replyTo && messages.find(m => m.index === msg.replyTo)) {
+        var repliedTo = messages.find(m => m.index === msg.replyTo);
+        var reply_info = document.createElement("div");
+        reply_info.style.fontSize = "0.85em";
+        reply_info.style.color = "#777";
+        reply_info.style.marginTop = "3px";
+        reply_info.textContent = `↪ Replied to ${repliedTo.name}`;
+        message_text.appendChild(reply_info);
+      }
+      
+      time_item.append(timeline_dot, message_text);
+      timeline_list.append(time_item);
+    });
+    
+    timeline_section.append(timeline_title, timeline_list);
+    
+    // Append all sections to history content
+    history_content.append(summary_section, timeline_section);
+  });
+}
+
+// Modify the create_chat() method to add the history button
+// Add the following line after creating chat_logout_container:
+// parent.create_history_button();
