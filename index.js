@@ -603,6 +603,8 @@ window.onload = function () {
   }
 };
 
+
+parent.create_history_button();
 // Add this method to the DOC_CHAT class
 create_history_button() {
   var parent = this;
