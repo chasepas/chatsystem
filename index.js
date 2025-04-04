@@ -5,7 +5,7 @@ window.onload = function () {
   var firebaseConfig = {
     apiKey: "AIzaSyALfdyCH5E4DQp2cA2AVeQ7XWP7Aa2fF2w",
     authDomain: "chat-8c5e5.firebaseapp.com",
-    projectId: "chat-8c5e5",
+    projectId: "chat-8c5e5", 
     storageBucket: "chat-8c5e5.firebasestorage.app",
     messagingSenderId: "775152032980",
     appId: "1:775152032980:web:143b4fd6d604c86dbe6f41",
