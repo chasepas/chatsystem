@@ -20,6 +20,8 @@ window.onload = function () {
     constructor() {
       // Extract the Google Doc ID from the URL or referrer when possible
       this.docId = this.extractGoogleDocId();
+      // Track which message we're replying to
+      this.replyingTo = null;
     }
     
     // Function to extract Google Doc ID from URL parameters or referrer
@@ -183,6 +185,24 @@ window.onload = function () {
       var chat_input_container = document.createElement("div");
       chat_input_container.setAttribute("id", "chat_input_container");
 
+      // Create reply indicator container
+      var reply_indicator_container = document.createElement("div");
+      reply_indicator_container.setAttribute("id", "reply_indicator_container");
+      reply_indicator_container.style.display = "none";
+      
+      var reply_text = document.createElement("div");
+      reply_text.setAttribute("id", "reply_text");
+      
+      var cancel_reply = document.createElement("button");
+      cancel_reply.setAttribute("id", "cancel_reply");
+      cancel_reply.innerHTML = "×";
+      cancel_reply.onclick = function() {
+        parent.replyingTo = null;
+        reply_indicator_container.style.display = "none";
+      };
+      
+      reply_indicator_container.append(reply_text, cancel_reply);
+
       var chat_input_send = document.createElement("button");
       chat_input_send.setAttribute("id", "chat_input_send");
       chat_input_send.setAttribute("disabled", true);
@@ -208,8 +228,12 @@ window.onload = function () {
             parent.create_load("chat_content_container");
             // Filter the message before sending (handling the async operation)
             parent.filter_message(chat_input.value).then((filtered_message) => {
-              // Send the filtered message
-              parent.send_message(filtered_message);
+              // Send the filtered message with reply info if available
+              parent.send_message(filtered_message, parent.replyingTo);
+              
+              // Clear reply state
+              parent.replyingTo = null;
+              reply_indicator_container.style.display = "none";
             });
             // Clear the chat input box
             chat_input.value = "";
@@ -235,7 +259,7 @@ window.onload = function () {
       };
 
       chat_logout_container.append(chat_logout);
-      chat_input_container.append(chat_input, chat_input_send);
+      chat_input_container.append(reply_indicator_container, chat_input, chat_input_send);
       chat_inner_container.append(
         chat_content_container,
         chat_input_container,
@@ -243,10 +267,81 @@ window.onload = function () {
       );
       chat_container.append(chat_inner_container);
       document.body.append(chat_container);
+      
+      // Add CSS for reply-related elements
+      this.add_reply_styles();
+      
       // After creating the chat. We immediatly create a loading circle in the 'chat_content_container'
       parent.create_load("chat_content_container");
       // then we "refresh" and get the chat data from Firebase
       parent.refresh_chat();
+    }
+    
+    // Add CSS styles for reply system
+    add_reply_styles() {
+      const style = document.createElement('style');
+      style.textContent = `
+        .reply_button {
+          background: none;
+          border: none;
+          color: #7e7e7e;
+          cursor: pointer;
+          font-size: 0.8em;
+          padding: 2px 5px;
+          margin-right: 5px;
+          border-radius: 3px;
+        }
+        
+        .reply_button:hover {
+          background-color: #f1f1f1;
+          color: #555;
+        }
+        
+        .message_actions {
+          display: flex;
+          padding-top: 3px;
+          padding-left: 10px;
+        }
+        
+        .replied_to {
+          font-size: 0.8em;
+          color: #7e7e7e;
+          padding: 2px 0;
+          margin-bottom: 2px;
+          border-left: 2px solid #ccc;
+          padding-left: 8px;
+        }
+        
+        #reply_indicator_container {
+          display: flex;
+          align-items: center;
+          background-color: #f1f1f1;
+          padding: 5px 10px;
+          border-radius: 5px;
+          margin-bottom: 5px;
+          width: 100%;
+          justify-content: space-between;
+        }
+        
+        #reply_text {
+          color: #555;
+          font-size: 0.9em;
+        }
+        
+        #cancel_reply {
+          background: none;
+          border: none;
+          color: #999;
+          cursor: pointer;
+          font-size: 1.2em;
+          padding: 0 5px;
+        }
+        
+        #cancel_reply:hover {
+          color: #555;
+        }
+      `;
+      document.head.appendChild(style);
     }
 
     // Filter message to remove swear words using PurgoMalum API
@@ -284,8 +379,29 @@ window.onload = function () {
       localStorage.setItem("name", name);
     }
     
+    // Set up replying to a specific message
+    set_reply(messageId, userName, messageContent) {
+      var parent = this;
+      parent.replyingTo = messageId;
+      
+      // Show the reply indicator
+      var reply_indicator = document.getElementById("reply_indicator_container");
+      var reply_text = document.getElementById("reply_text");
+      
+      // Truncate message if it's too long
+      const truncatedContent = messageContent.length > 30 
+        ? messageContent.substring(0, 30) + "..." 
+        : messageContent;
+        
+      reply_text.textContent = `Replying to ${userName}: "${truncatedContent}"`;
+      reply_indicator.style.display = "flex";
+      
+      // Focus on the input box
+      document.getElementById("chat_input").focus();
+    }
+    
     // Sends message/saves the message to firebase database
-    send_message(message) {
+    send_message(message, replyToId = null) {
       var parent = this;
       // if the local storage name is null and there is no message
       // then return/don't send the message. The user is somehow hacking
@@ -303,13 +419,20 @@ window.onload = function () {
       db.ref(`doc_chats/${safeDocId}/messages`).once("value", function (message_object) {
         // This index is important. It will help organize the chat in order
         var index = parseFloat(message_object.numChildren()) + 1;
+        const messageData = {
+          name: parent.get_name(),
+          message: message,
+          index: index,
+          timestamp: Date.now()
+        };
+        
+        // Add reply info if replying to a message
+        if (replyToId) {
+          messageData.replyTo = replyToId;
+        }
+        
         db.ref(`doc_chats/${safeDocId}/messages/` + `message_${index}`)
-          .set({
-            name: parent.get_name(),
-            message: message,
-            index: index,
-            timestamp: Date.now() // Add timestamp for better sorting
-          })
+          .set(messageData)
           .then(function () {
             // After we send the chat refresh to get the new messages
             parent.refresh_chat();
@@ -366,12 +489,15 @@ window.onload = function () {
         var guide = []; // this will be our guide to organizing the messages
         var unordered = []; // unordered messages
         var ordered = []; // we're going to order these messages
-
+        var messageMap = {}; // Map to store messages by their indices for lookup
+        
         for (var i, i = 0; i < messages.length; i++) {
           // The guide is simply an array from 0 to the messages.length
           guide.push(i + 1);
           // unordered is the [message, index_of_the_message]
           unordered.push([messages[i], messages[i].index]);
+          // Store the message in our map with its index as the key
+          messageMap[messages[i].index] = messages[i];
         }
 
         // Now this is straight up from stack overflow 🤣
@@ -394,9 +520,12 @@ window.onload = function () {
         ordered.forEach(function (data) {
           var name = data.name;
           var message = data.message;
+          var messageId = data.index;
+          var replyTo = data.replyTo;
 
           var message_container = document.createElement("div");
           message_container.setAttribute("class", "message_container");
+          message_container.setAttribute("data-message-id", messageId);
 
           var message_inner_container = document.createElement("div");
           message_inner_container.setAttribute(
@@ -419,10 +548,34 @@ window.onload = function () {
             "class",
             "message_content_container"
           );
+          
+          // If this is a reply to another message, show the reference
+          if (replyTo && messageMap[replyTo]) {
+            var replied_to = document.createElement("div");
+            replied_to.setAttribute("class", "replied_to");
+            replied_to.innerHTML = `
+              <span>Replying to <b>${messageMap[replyTo].name}</b>: "${messageMap[replyTo].message.substring(0, 30)}${messageMap[replyTo].message.length > 30 ? '...' : ''}"</span>
+            `;
+            message_content_container.append(replied_to);
+          }
 
           var message_content = document.createElement("p");
           message_content.setAttribute("class", "message_content");
           message_content.textContent = `${message}`;
+          
+          // Create message actions container (for reply button)
+          var message_actions = document.createElement("div");
+          message_actions.setAttribute("class", "message_actions");
+          
+          // Add reply button
+          var reply_button = document.createElement("button");
+          reply_button.setAttribute("class", "reply_button");
+          reply_button.textContent = "Reply";
+          reply_button.onclick = function() {
+            parent.set_reply(messageId, name, message);
+          };
+          
+          message_actions.append(reply_button);
 
           message_user_container.append(message_user);
           message_content_container.append(message_content);
@@ -430,7 +583,7 @@ window.onload = function () {
             message_user_container,
             message_content_container
           );
-          message_container.append(message_inner_container);
+          message_container.append(message_inner_container, message_actions);
 
           chat_content_container.append(message_container);
         });
@@ -449,5 +602,3 @@ window.onload = function () {
     app.home();
   }
 };
-
-
