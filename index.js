@@ -832,14 +832,7 @@ window.onload = function () {
   if (app.get_name() != null) {
     app.chat();
   } else {
-    app
-    // So we've "built" our app. Let's make it work!!
-  var app = new DOC_CHAT();
-  // If we have a name stored in localStorage.
-  // Then use that name. Otherwise, go to home.
-  if (app.get_name() != null) {
-    app.chat();
-  } else {
     app.home();
   }
 };
+
