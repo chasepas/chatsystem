@@ -15,6 +15,186 @@ window.onload = function () {
   firebase.initializeApp(firebaseConfig);
   // This is very IMPORTANT!! We're going to use "db" a lot.
   var db = firebase.database();
+  
+  // Add dark mode styles to the document
+  function addDarkModeStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      /* Dark mode styles */
+      body.dark-mode {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode #title_container {
+        background-color: #2d2d2d;
+        border-bottom: 2px solid #444;
+      }
+      
+      body.dark-mode #title {
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode #join_container {
+        background-color: #1a1a1a;
+      }
+      
+      body.dark-mode #join_inner_container {
+        background-color: #2d2d2d;
+        border: 2px solid #444;
+      }
+      
+      body.dark-mode #join_input {
+        background-color: #3d3d3d;
+        color: #e0e0e0;
+        border: 1px solid #555;
+      }
+      
+      body.dark-mode #join_input::placeholder {
+        color: #aaa;
+      }
+      
+      body.dark-mode #join_button {
+        background-color: #3d3d3d;
+        color: #aaa;
+      }
+      
+      body.dark-mode #join_button.enabled {
+        background-color: #4d71b8;
+        color: #fff;
+      }
+      
+      body.dark-mode #chat_container {
+        background-color: #1a1a1a;
+      }
+      
+      body.dark-mode #chat_inner_container {
+        background-color: #2d2d2d;
+        border: 2px solid #444;
+      }
+      
+      body.dark-mode #chat_content_container {
+        background-color: #3d3d3d;
+      }
+      
+      body.dark-mode .message_container {
+        border-bottom: 1px solid #555;
+      }
+      
+      body.dark-mode #chat_input_container {
+        background-color: #2d2d2d;
+        border-top: 1px solid #444;
+      }
+      
+      body.dark-mode #chat_input {
+        background-color: #3d3d3d;
+        color: #e0e0e0;
+        border: 1px solid #555;
+      }
+      
+      body.dark-mode #chat_input::placeholder {
+        color: #aaa;
+      }
+      
+      body.dark-mode #chat_input_send {
+        background-color: #3d3d3d;
+        color: #aaa;
+      }
+      
+      body.dark-mode #chat_input_send.enabled {
+        background-color: #4d71b8;
+        color: #fff;
+      }
+      
+      body.dark-mode #chat_logout_container {
+        background-color: #2d2d2d;
+        border-top: 1px solid #444;
+      }
+      
+      body.dark-mode #chat_logout {
+        background-color: #3d3d3d;
+        color: #e0e0e0;
+        border: 1px solid #555;
+      }
+      
+      body.dark-mode .message_user {
+        color: #4d71b8;
+      }
+      
+      body.dark-mode .message_content {
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode #room_info {
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode .reply_button {
+        color: #9e9e9e;
+      }
+      
+      body.dark-mode .reply_button:hover {
+        background-color: #4d4d4d;
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode .replied_to {
+        color: #9e9e9e;
+        border-left: 2px solid #666;
+      }
+      
+      body.dark-mode #reply_indicator_container {
+        background-color: #4d4d4d;
+      }
+      
+      body.dark-mode #reply_text {
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode #cancel_reply {
+        color: #aaa;
+      }
+      
+      body.dark-mode #cancel_reply:hover {
+        color: #e0e0e0;
+      }
+      
+      /* Dark mode toggle button */
+      #dark_mode_toggle {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background-color: #f1f1f1;
+        border: none;
+        border-radius: 20px;
+        padding: 5px 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+      
+      #dark_mode_toggle:hover {
+        background-color: #e0e0e0;
+      }
+      
+      body.dark-mode #dark_mode_toggle {
+        background-color: #4d4d4d;
+        color: #e0e0e0;
+      }
+      
+      body.dark-mode #dark_mode_toggle:hover {
+        background-color: #5d5d5d;
+      }
+      
+      #dark_mode_icon {
+        margin-right: 5px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
   // We're going to use oBjEcT OrIeNtEd PrOgRaMmInG. Lol
   class DOC_CHAT {
     constructor() {
@@ -22,6 +202,10 @@ window.onload = function () {
       this.docId = this.extractGoogleDocId();
       // Track which message we're replying to
       this.replyingTo = null;
+      // Initialize dark mode based on user preference
+      this.initializeDarkMode();
+      // Add dark mode styles
+      addDarkModeStyles();
     }
     
     // Function to extract Google Doc ID from URL parameters or referrer
@@ -47,6 +231,45 @@ window.onload = function () {
       // If we can't determine the docId, use a default or generate a random one
       return 'default-room';
     }
+    
+    // Initialize dark mode based on saved preference
+    initializeDarkMode() {
+      const darkModeEnabled = localStorage.getItem('darkMode') === 'true';
+      if (darkModeEnabled) {
+        document.body.classList.add('dark-mode');
+      }
+    }
+    
+    // Toggle dark mode
+    toggleDarkMode() {
+      const isDarkMode = document.body.classList.toggle('dark-mode');
+      localStorage.setItem('darkMode', isDarkMode);
+    }
+    
+    // Create dark mode toggle button
+    createDarkModeToggle() {
+      const parent = this;
+      const darkModeToggle = document.createElement('button');
+      darkModeToggle.setAttribute('id', 'dark_mode_toggle');
+      
+      // Determine current mode
+      const isDarkMode = document.body.classList.contains('dark-mode');
+      
+      // Set appropriate text and icon
+      darkModeToggle.innerHTML = isDarkMode ? 
+        '<span id="dark_mode_icon">☀️</span> Light Mode' : 
+        '<span id="dark_mode_icon">🌙</span> Dark Mode';
+      
+      darkModeToggle.onclick = function() {
+        parent.toggleDarkMode();
+        const isDarkModeNow = document.body.classList.contains('dark-mode');
+        darkModeToggle.innerHTML = isDarkModeNow ? 
+          '<span id="dark_mode_icon">☀️</span> Light Mode' : 
+          '<span id="dark_mode_icon">🌙</span> Dark Mode';
+      };
+      
+      document.body.appendChild(darkModeToggle);
+    }
 
     // Home() is used to create the home page
     home() {
@@ -55,12 +278,16 @@ window.onload = function () {
       document.body.innerHTML = "";
       this.create_title();
       this.create_join_form();
+      this.createDarkModeToggle();
     }
+    
     // chat() is used to create the chat page
     chat() {
       this.create_title();
       this.create_chat();
+      this.createDarkModeToggle();
     }
+    
     // create_title() is used to create the title
     create_title() {
       // This is the title creator. 🎉
@@ -77,6 +304,7 @@ window.onload = function () {
       title_container.append(title_inner_container);
       document.body.append(title_container);
     }
+    
     // create_join_form() creates the join form
     create_join_form() {
       var parent = this;
@@ -138,6 +366,7 @@ window.onload = function () {
       join_container.append(join_inner_container);
       document.body.append(join_container);
     }
+    
     // create_load() creates a loading circle that is used in the chat container
     create_load(container_id) {
       // YOU ALSO MUST HAVE (PARENT = THIS). BUT IT'S WHATEVER THO.
@@ -156,6 +385,7 @@ window.onload = function () {
       loader_container.append(loader);
       container.append(loader_container);
     }
+    
     // create_chat() creates the chat container and stuff
     create_chat() {
       // Again! You need to have (parent = this)
@@ -439,6 +669,7 @@ window.onload = function () {
           });
       });
     }
+    
     // Get name. Gets the username from localStorage
     get_name() {
       // Get the name from localstorage
@@ -449,6 +680,7 @@ window.onload = function () {
         return null;
       }
     }
+    
     // Refresh chat gets the message/chat data from firebase
     refresh_chat() {
       var parent = this;
@@ -592,6 +824,7 @@ window.onload = function () {
       });
     }
   }
+  
   // So we've "built" our app. Let's make it work!!
   var app = new DOC_CHAT();
   // If we have a name stored in localStorage.
@@ -602,3 +835,4 @@ window.onload = function () {
     app.home();
   }
 };
+
