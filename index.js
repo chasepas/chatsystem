@@ -21,6 +21,24 @@ window.onload = function () {
     const style = document.createElement('style');
     style.textContent = `
       /* Dark mode styles */
+      body #title:focus {
+        outline: 1px dashed #999;
+        padding: 2px;
+      }
+      
+      body.dark-mode #title:focus {
+        outline: 1px dashed #777;
+        padding: 2px;
+      }
+      
+      #title {
+        cursor: text;
+      }
+      
+      #doc_subtitle {
+        text-align: center;
+        margin-top: 5px;
+      }      
       body.dark-mode {
         background-color: #1a1a1a;
         color: #e0e0e0;
@@ -287,6 +305,11 @@ window.onload = function () {
       this.create_chat();
       this.createDarkModeToggle();
     }
+
+    save_title(title_text) {
+      const safeDocId = this.docId.replace(/[.#$/[\]]/g, '_');
+      db.ref(`doc_chats/${safeDocId}/title`).set(title_text);
+    } 
     
     // create_title() is used to create the title
     create_title() {
@@ -387,8 +410,7 @@ window.onload = function () {
     }
     
     // create_chat() creates the chat container and stuff
-    create_chat() {
-      // Again! You need to have (parent = this)
+    // Again! You need to have (parent = this)
       var parent = this;
       // GET THAT MEMECHAT HEADER OUTTA HERE
       var title_container = document.getElementById("title_container");
@@ -396,12 +418,21 @@ window.onload = function () {
       title_container.classList.add("chat_title_container");
       // Make the title smaller by making it 'chat_title'
       title.classList.add("chat_title");
+      title.setAttribute("contenteditable", "true");
+      title.onblur = function() {
+        parent.save_title(title.textContent);
+      };
       
-      // Show a shortened version of the document ID in the title
+      // Show a shortened version of the document ID in a subtitle
       const shortDocId = parent.docId.length > 10 
         ? parent.docId.substring(0, 10) + "..." 
         : parent.docId;
-      title.textContent = `Doc Chat: ${shortDocId}`;
+      
+      var subtitle = document.createElement("div");
+      subtitle.setAttribute("id", "doc_subtitle");
+      subtitle.textContent = `Document: ${shortDocId}`;
+      
+      title_container.appendChild(subtitle);
 
       var chat_container = document.createElement("div");
       chat_container.setAttribute("id", "chat_container");
@@ -645,6 +676,17 @@ window.onload = function () {
       const docId = parent.docId;
       // Make sure the docId is safe for Firebase (removing invalid characters)
       const safeDocId = docId.replace(/[.#$/[\]]/g, '_');
+
+        // Load the title if it exists
+      db.ref(`doc_chats/${safeDocId}/title`).once("value", function(title_snapshot) {
+        if (title_snapshot.exists()) {
+          document.getElementById("title").textContent = title_snapshot.val();
+        } else {
+          // Set default title if none exists
+          document.getElementById("title").textContent = "Doc Chat";
+          parent.save_title("Doc Chat");
+        }
+      });    
       
       db.ref(`doc_chats/${safeDocId}/messages`).once("value", function (message_object) {
         // This index is important. It will help organize the chat in order
