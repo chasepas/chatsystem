@@ -411,6 +411,7 @@ window.onload = function () {
     
     // create_chat() creates the chat container and stuff
     // Again! You need to have (parent = this)
+    create_chat() {
       var parent = this;
       // GET THAT MEMECHAT HEADER OUTTA HERE
       var title_container = document.getElementById("title_container");
